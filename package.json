@@ -1,0 +1,31 @@
+{
+  "name": "botwa-baileys",
+  "version": "1.0.0",
+  "description": "Simple WhatsApp Bot using Baileys",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "nodemon main.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.13.5",
+    "canvas": "^3.2.1",
+    "dotenv": "^17.3.1",
+    "pino": "^8.15.0",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.34.5",
+    "wa-sticker-formatter": "^4.4.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

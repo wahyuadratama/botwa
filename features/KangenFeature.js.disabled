@@ -1,0 +1,21 @@
+class KangenFeature {
+  constructor() {
+    this.name = 'kangen';
+    this.description = '_Pesan kangen untuk sayang_';
+    this.ownerOnly = false;
+  }
+
+  async execute(m, sock) {
+    try {
+      await sock.sendMessage(m.key.remoteJid, { 
+        text: 'Sayang Call yuu' 
+      });
+    } catch (error) {
+      await sock.sendMessage(m.key.remoteJid, { 
+        text: `*KANGEN*\n\n❌ Error: ${error.message}` 
+      });
+    }
+  }
+}
+
+module.exports = KangenFeature;
