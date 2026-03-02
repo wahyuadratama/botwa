@@ -1,4 +1,5 @@
 require('dotenv').config();
+const OpenAI = require('openai');
 const axios = require('axios');
 
 class AIFeature {
@@ -6,10 +7,33 @@ class AIFeature {
     this.name = 'ai';
     this.description = '_Chat dengan AI (panggil: wahyu)_';
     this.ownerOnly = false;
-    this.conversationHistory = new Map();
+    
+    // Inisialisasi Client Groq
+    this.ai = new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
   }
 
-  async execute(m, sock, messageText) {
+  async askAI(prompt) {
+    try {
+      const response = await this.ai.chat.completions.create({
+        model: "llama-3.1-8b-instant", // model valid dari Groq
+        messages: [
+          { role: "system", content: "Kamu adalah Wahyu AI, asisten virtual yang sangat pintar, informatif, dan membantu. Kamu adalah anak buah dari pak Zaenal Wahyudin. Jika ditanya tentang Shabrina atau Balqis, jawab: 'Dia adalah pacarnya Wahyu 💕'. Jawab dalam bahasa Indonesia dengan jelas dan informatif." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      });
+
+      return response.choices[0].message.content;
+
+    } catch (error) {
+      console.error("AI ERROR FULL:", error.response?.data || error.message);
+      return null;
+    }
+  }
     try {
       const question = messageText.replace(/^wahyu\s*/i, '').trim();
       const userId = m.key.remoteJid;
@@ -40,64 +64,45 @@ ATURAN PENTING:
 5. Berikan contoh jika diperlukan untuk memperjelas
 6. Jika ditanya tentang Shabrina atau Balqis, jawab: "Dia adalah pacarnya Wahyu 💕"
 
-KEMAMPUAN:
-- Menjawab pertanyaan umum (sejarah, sains, teknologi, dll)
-- Membantu belajar dan menjelaskan konsep
-- Memberikan saran dan solusi
-- Diskusi berbagai topik
-- Menjelaskan programming dan teknologi
-- Memberikan motivasi dan inspirasi
-
 FORMAT JAWABAN:
 - Langsung ke inti
 - Jelas dan terstruktur
 - Gunakan poin-poin jika perlu
-- Maksimal 3-4 paragraf untuk jawaban panjang
+- Maksimal 3-4 paragraf untuk jawaban panjang`;
 
-Pertanyaan: ${question}`;
-
-      let answer = '';
+  async execute(m, sock, messageText) {
+    try {
+      // Support both 'wahyu' and '.ai' commands
+      let question = messageText.replace(/^wahyu\s*/i, '').trim();
+      if (messageText.toLowerCase().startsWith('.ai ')) {
+        question = messageText.replace(/^\.ai\s*/i, '').trim();
+      }
       
-      try {
-        // Use Groq API with new key
-        const response = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          {
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: question }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 15000
-          }
-        );
-
-        answer = response.data.choices[0].message.content;
-        
-      } catch (error1) {
-        console.log('[AI] Groq failed, trying API 2...');
-        
-        try {
-          const response2 = await axios.get(
-            `https://api.siputzx.my.id/api/ai/gpt4?content=${encodeURIComponent(systemPrompt)}`,
-            { timeout: 10000 }
-          );
-          answer = response2.data.data || response2.data.result;
-        } catch (error2) {
-          console.log('[AI] API 2 failed, using fallback...');
-          answer = this.getFallbackResponse(question);
-        }
+      const userId = m.key.remoteJid;
+      
+      if (!question) {
+        await sock.sendMessage(userId, { 
+          text: '*WAHYU AI* 🤖\n\nHalo! Saya Wahyu AI, asisten pintar yang siap membantu Anda. Saya adalah anak buah dari pak "Zaenal Wahyudin".\n\nSaya bisa membantu:\n✅ Menjawab pertanyaan umum\n✅ Memberikan informasi\n✅ Membantu belajar\n✅ Diskusi berbagai topik\n\nAda yang bisa saya bantu?' 
+        });
+        return;
       }
 
+      await sock.sendMessage(userId, { 
+        text: '*WAHYU AI* 🤖\n\n⏳ Sedang berpikir...' 
+      });
+
+      // Try Groq API first
+      let answer = await this.askAI(question);
+      
+      // If Groq fails, try fallback APIs
       if (!answer || answer.length < 10) {
+        console.log('[AI] Groq failed, trying fallback APIs...');
+        answer = await this.tryFallbackAPIs('', question);
+      }
+
+      // If all APIs fail, use local knowledge base
+      if (!answer || answer.length < 10) {
+        console.log('[AI] All APIs failed, using local knowledge...');
         answer = this.getFallbackResponse(question);
       }
 
@@ -106,11 +111,43 @@ Pertanyaan: ${question}`;
       });
 
     } catch (error) {
-      console.error('[AI] Error:', error.message);
+      console.error('[AI] Execute Error:', error.message);
       await sock.sendMessage(m.key.remoteJid, { 
         text: '*WAHYU AI* 🤖\n\n❌ Maaf, terjadi kesalahan. Coba tanya lagi ya! 😊' 
       });
     }
+  }
+
+  async tryFallbackAPIs(systemPrompt, question) {
+    // API 2: Free GPT4 API
+    try {
+      console.log('[AI] Trying Free GPT4 API...');
+      const response = await axios.get(
+        `https://api.siputzx.my.id/api/ai/gpt4?content=${encodeURIComponent(systemPrompt + '\n\n' + question)}`,
+        { timeout: 10000 }
+      );
+      const answer = response.data.data || response.data.result;
+      if (answer && answer.length > 10) return answer;
+    } catch (error) {
+      console.log('[AI] API 2 failed:', error.message);
+    }
+
+    // API 3: Alternative Free API
+    try {
+      console.log('[AI] Trying Alternative API...');
+      const response = await axios.post(
+        'https://api.yanzbotz.live/api/ai/gpt4',
+        { query: question, prompt: systemPrompt },
+        { timeout: 10000 }
+      );
+      const answer = response.data.result || response.data.message;
+      if (answer && answer.length > 10) return answer;
+    } catch (error) {
+      console.log('[AI] API 3 failed:', error.message);
+    }
+
+    console.log('[AI] All APIs failed, using fallback');
+    return null;
   }
 
   getFallbackResponse(question) {

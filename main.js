@@ -1,4 +1,5 @@
 require('dotenv').config();
+const OpenAI = require('openai');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
@@ -222,8 +223,8 @@ async function connectToWhatsApp() {
         }
       }
       
-      // Handle AI chat with 'wahyu' keyword
-      if (body.toLowerCase().startsWith('wahyu')) {
+      // Handle AI chat with 'wahyu' keyword or .ai command
+      if (body.toLowerCase().startsWith('wahyu') || body.toLowerCase().startsWith('.ai ')) {
         console.log('[CMD] AI command detected');
         const aiFeature = features.get('ai');
         if (aiFeature) {
