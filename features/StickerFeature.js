@@ -1,9 +1,5 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execPromise = promisify(exec);
+const sharp = require('sharp');
 
 class StickerFeature {
   constructor() {
@@ -19,15 +15,9 @@ class StickerFeature {
       const videoMsg = quotedMsg?.videoMessage || m.message?.videoMessage;
 
       if (!imageMsg && !videoMsg) {
-        await sock.sendMessage(m.key.remoteJid, { 
-          text: '*STICKER MAKER*\n\n❌ Reply ke gambar atau video!' 
-        });
+        await sock.sendMessage(m.key.remoteJid, { text: '❌ Reply ke gambar atau video!' });
         return;
       }
-
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: '*STICKER MAKER*\n\n⏳ Membuat sticker...' 
-      });
 
       const buffer = await downloadMediaMessage(
         quotedMsg ? { message: quotedMsg } : m,
@@ -36,14 +26,16 @@ class StickerFeature {
         { logger: console, reuploadRequest: sock.updateMediaMessage }
       );
 
-      await sock.sendMessage(m.key.remoteJid, {
-        sticker: buffer
-      });
+      // Optimize with sharp - resize to 512x512 webp
+      const optimized = await sharp(buffer)
+        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      await sock.sendMessage(m.key.remoteJid, { sticker: optimized });
 
     } catch (error) {
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: `*STICKER MAKER*\n\n❌ Error: ${error.message}` 
-      });
+      await sock.sendMessage(m.key.remoteJid, { text: `❌ Error: ${error.message}` });
     }
   }
 }

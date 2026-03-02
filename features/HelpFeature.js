@@ -7,40 +7,33 @@ class HelpFeature {
 
   async execute(m, sock) {
     try {
-      const helpText = `*BOT MENU* 🤖
+      const helpText = `*BOT MENU*
 
 *UTILITY*
-.ping - Cek ping bot
-.help - Menu bantuan
-.info - Info bot
-.sticker - Buat sticker dari gambar
-.steks - Buat sticker dari teks
-.toimg - Convert sticker ke gambar
-.qr - Generate QR code
-.calc - Kalkulator
-.translate - Translate bahasa
-.remind - Set reminder
-.ad - Lihat pesan yang dihapus
-.tagall - Tag semua anggota grup
+.ping .help .info .sticker
+.qr .calc .translate .remind .ad
+.toimg .steks .passgen .meme
 
 *FUN*
-.dice - Lempar dadu
-.coin - Lempar koin
-.quotes - Quote random
-.jokes - Jokes random
-.facts - Fakta random
+.dice .coin .quotes
+.jokes .facts .lovecalc
 
-*AI (PINTAR)*
-wahyu [pertanyaan] - Chat dengan AI
+*PRODUCTIVITY*
+.note - Catatan pribadi
+.poll - Buat polling (grup)
+.vote - Vote polling
+.pollresult - Hasil polling
 
-*OWNER ONLY*
-!rvo - View once bypass
-!owner - Info owner
-!groupinfo - Info grup (untuk whitelist)
+*AI*
+wahyu [pertanyaan]
+.ai [pertanyaan]
+
+*OWNER*
+!rvo !owner
 
 _Bot by WahyuAdratama_`;
 
-      const imageUrl = 'https://i.pinimg.com/originals/7c/8f/4d/7c8f4d89e830376e9e2f3a8c5b0e6f2a.jpg';
+      const imageUrl = 'https://i.pinimg.com/736x/a4/45/61/a44561dd0273d1a94103c707bc2a38ea.jpg';
 
       await sock.sendMessage(m.key.remoteJid, { 
         image: { url: imageUrl },
@@ -48,21 +41,29 @@ _Bot by WahyuAdratama_`;
       });
 
     } catch (error) {
-      const helpText = `*BOT MENU* 🤖
+      const helpText = `*BOT MENU*
 
 *UTILITY*
-.ping .help .info .sticker .steks
-.toimg .qr .calc .translate .remind
-.ad .tagall
+.ping .help .info .sticker
+.qr .calc .translate .remind .ad
+.toimg .steks .passgen .meme
 
 *FUN*
-.dice .coin .quotes .jokes .facts
+.dice .coin .quotes
+.jokes .facts .lovecalc
+
+*PRODUCTIVITY*
+.note - Catatan pribadi
+.poll - Buat polling (grup)
+.vote - Vote polling
+.pollresult - Hasil polling
 
 *AI*
 wahyu [pertanyaan]
+.ai [pertanyaan]
 
 *OWNER*
-!rvo !owner !groupinfo
+!rvo !owner
 
 _Bot by WahyuAdratama_`;
 

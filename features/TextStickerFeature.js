@@ -1,5 +1,5 @@
-const axios = require('axios');
-const { Sticker } = require('wa-sticker-formatter');
+const { createCanvas } = require('canvas');
+const sharp = require('sharp');
 
 class TextStickerFeature {
   constructor() {
@@ -13,60 +13,55 @@ class TextStickerFeature {
       const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
       const quoted = m.message.extendedTextMessage?.contextInfo?.quotedMessage;
       
-      let stickerText = '';
-      
-      // Check if replying to a message
-      if (quoted) {
-        stickerText = quoted.conversation || quoted.extendedTextMessage?.text || '';
-      } else {
-        // Use text after command
-        stickerText = text.replace(/^\.steks\s*/i, '').trim();
-      }
+      let stickerText = quoted ? (quoted.conversation || quoted.extendedTextMessage?.text || '') : text.replace(/^\.steks\s*/i, '').trim();
       
       if (!stickerText) {
-        await sock.sendMessage(m.key.remoteJid, { 
-          text: '❌ Gunakan:\n\n1. .steks [teks]\n2. Reply chat dengan .steks\n\nContoh: .steks Halo Dunia!' 
-        }, { quoted: m });
+        await sock.sendMessage(m.key.remoteJid, { text: '❌ Gunakan: .steks [teks] atau reply chat dengan .steks' });
         return;
       }
 
-      // Limit text length
-      if (stickerText.length > 100) {
-        stickerText = stickerText.substring(0, 100);
-      }
+      if (stickerText.length > 100) stickerText = stickerText.substring(0, 100);
 
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: '⏳ Membuat sticker...' 
-      }, { quoted: m });
-
-      // Use API to generate image
-      const apiUrl = `https://dummyimage.com/512x512/000/fff.png&text=${encodeURIComponent(stickerText)}`;
+      // Create canvas locally (faster than API)
+      const canvas = createCanvas(512, 512);
+      const ctx = canvas.getContext('2d');
       
-      const response = await axios.get(apiUrl, { 
-        responseType: 'arraybuffer',
-        timeout: 15000 
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 40px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      const words = stickerText.split(' ');
+      const lines = [];
+      let line = '';
+      
+      for (const word of words) {
+        const testLine = line + word + ' ';
+        if (ctx.measureText(testLine).width > 480 && line) {
+          lines.push(line);
+          line = word + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      lines.push(line);
+      
+      const lineHeight = 50;
+      const startY = 256 - ((lines.length - 1) * lineHeight) / 2;
+      
+      lines.forEach((line, i) => {
+        ctx.fillText(line.trim(), 256, startY + i * lineHeight);
       });
 
-      // Convert to sticker with wa-sticker-formatter
-      const sticker = new Sticker(response.data, {
-        pack: 'BOTWA',
-        author: 'Wahyu',
-        type: 'full',
-        quality: 50
-      });
+      const buffer = canvas.toBuffer('image/png');
+      const webp = await sharp(buffer).webp({ quality: 80 }).toBuffer();
 
-      const stickerBuffer = await sticker.toBuffer();
-
-      // Send as sticker
-      await sock.sendMessage(m.key.remoteJid, {
-        sticker: stickerBuffer
-      }, { quoted: m });
+      await sock.sendMessage(m.key.remoteJid, { sticker: webp });
 
     } catch (error) {
-      console.error('TextSticker Error:', error.message);
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: '❌ Gagal membuat sticker! Coba lagi dengan teks lebih pendek.' 
-      }, { quoted: m });
+      await sock.sendMessage(m.key.remoteJid, { text: '❌ Gagal membuat sticker!' });
     }
   }
 }

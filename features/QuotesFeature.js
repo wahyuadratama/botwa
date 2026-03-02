@@ -33,22 +33,46 @@ class QuotesFeature {
       "🌅 Hari ini adalah kesempatan sempurna untuk menjadi versi terbaik dirimu. - Unknown",
       "🚀 Jangan batasi tantanganmu, tantang batasanmu. - Unknown",
       "🎯 Sukses adalah jumlah dari usaha kecil yang diulang setiap hari. - Robert Collier",
-      "💪 Yang membedakan pemenang dan pecundang adalah bagaimana mereka menangani kekalahan. - Unknown"
+      "💪 Yang membedakan pemenang dan pecundang adalah bagaimana mereka menangani kekalahan. - Unknown",
+      "🌟 Hidup dimulai di ujung zona nyamanmu. - Neale Donald Walsch",
+      "🔥 Jangan tanya apa yang dunia butuhkan. Tanya apa yang membuatmu hidup, lalu lakukanlah. - Howard Thurman",
+      "💎 Tekanan membuat berlian. - Thomas Carlyle",
+      "🎯 Tindakan adalah kunci dasar untuk semua kesuksesan. - Pablo Picasso",
+      "🚀 Hal terbaik untuk memulai adalah berhenti bicara dan mulai melakukan. - Walt Disney",
+      "⭐ Jangan menunggu momen sempurna, ambil momen dan buat itu sempurna. - Unknown",
+      "💪 Kekuatan tidak datang dari kemenangan. Perjuanganmu mengembangkan kekuatanmu. - Arnold Schwarzenegger",
+      "🌈 Setelah badai, selalu ada pelangi. - Unknown",
+      "🔑 Rahasia untuk maju adalah memulai. - Mark Twain",
+      "🎯 Fokus pada apa yang bisa kamu kontrol. - Epictetus",
+      "✨ Bintang tidak bisa bersinar tanpa kegelapan. - Unknown",
+      "🏆 Juara adalah seseorang yang bangkit ketika dia tidak bisa. - Jack Dempsey",
+      "💡 Pikiran adalah segalanya. Apa yang kamu pikirkan, kamu menjadi itu. - Buddha",
+      "🌟 Jangan biarkan kemarin menghabiskan terlalu banyak hari ini. - Will Rogers",
+      "🔥 Passion adalah energi. Rasakan kekuatan yang datang dari fokus pada apa yang membuatmu bersemangat. - Oprah Winfrey",
+      "🚀 Masa depan tergantung pada apa yang kamu lakukan hari ini. - Mahatma Gandhi",
+      "💪 Kamu lebih kuat dari yang kamu pikirkan. - Unknown",
+      "🌱 Setiap ahli pernah menjadi pemula. - Robin Sharma",
+      "⚡ Energi dan ketekunan menaklukkan segalanya. - Benjamin Franklin",
+      "🎯 Tujuan tanpa rencana hanyalah keinginan. - Antoine de Saint-Exupéry",
+      "🌟 Percayalah pada dirimu sendiri dan semua yang kamu miliki. - Christian D. Larson",
+      "🔥 Jangan menunggu inspirasi. Jadilah inspirasi. - Unknown",
+      "💎 Kesulitan mempersiapkan orang biasa untuk takdir luar biasa. - C.S. Lewis",
+      "🏆 Sukses adalah perjalanan, bukan tujuan. - Ben Sweetland",
+      "✨ Kamu tidak pernah terlalu tua untuk menetapkan tujuan baru atau bermimpi impian baru. - C.S. Lewis",
+      "🚀 Lakukan apa yang kamu bisa, dengan apa yang kamu punya, di mana kamu berada. - Theodore Roosevelt",
+      "💪 Kegagalan adalah bumbu yang memberi rasa pada kesuksesan. - Truman Capote",
+      "🌈 Kehidupan adalah 10% apa yang terjadi padamu dan 90% bagaimana kamu bereaksi terhadapnya. - Lou Holtz",
+      "🔑 Kunci kesuksesan adalah memulai sebelum kamu siap. - Marie Forleo",
+      "🎯 Jangan hitung hari, buat hari berarti. - Muhammad Ali"
     ];
   }
 
   async execute(m, sock) {
     try {
       const randomQuote = this.quotes[Math.floor(Math.random() * this.quotes.length)];
-      
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: `*QUOTES* 💭\n\n"${randomQuote}"\n\n> Ketik .quotes lagi untuk quote lainnya!` 
-      });
-
+      await sock.sendMessage(m.key.remoteJid, { text: `💭 *QUOTE HARI INI*\n\n${randomQuote}` });
     } catch (error) {
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: `*QUOTES*\n\n❌ Error: ${error.message}` 
-      });
+      await sock.sendMessage(m.key.remoteJid, { text: '❌ Gagal mengambil quote!' });
     }
   }
 }

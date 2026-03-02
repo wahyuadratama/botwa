@@ -33,22 +33,46 @@ class JokesFeature {
       "Kenapa Batman tidak pernah selfie? Karena kameranya gelap! 🦇📸",
       "Apa yang lebih cepat dari cahaya? Gosip! 💬⚡",
       "Kenapa dinosaurus punah? Karena tidak ada yang ajarin coding! 🦕💻",
-      "Apa bedanya kamu dan matahari? Matahari terbit setiap hari, kamu terbit kalau ada duit! 🌅💰"
+      "Apa bedanya kamu dan matahari? Matahari terbit setiap hari, kamu terbit kalau ada duit! 🌅💰",
+      "Kenapa kamera tidak bisa bohong? Karena selalu fokus pada kenyataan! 📷",
+      "Apa bedanya kamu dan bank? Bank punya bunga, kamu cuma punya duri! 🌹",
+      "Kenapa pocong loncat-loncat? Karena kakinya diikat, bukan karena senang! 👻",
+      "Apa yang lebih menyakitkan dari patah hati? Patah tulang! Soalnya patah hati gratis, patah tulang bayar! 💔💊",
+      "Kenapa kalkulator tidak pernah salah? Karena dia tidak punya perasaan! 🧮",
+      "Apa bedanya kamu dan AC? AC bisa bikin adem, kamu bikin gerah! ❄️",
+      "Kenapa gajah tidak bisa naik pohon? Karena tidak punya KTP pohon! 🐘🌳",
+      "Apa yang lebih susah dari move on? Move on dari WiFi gratis! 📶😭",
+      "Kenapa ular tidak punya tangan? Karena kalau punya tangan namanya buaya! 🐍",
+      "Apa bedanya kamu dan lampu? Lampu bisa nyala, kamu cuma bisa nyala-nyalain! 💡🔥",
+      "Kenapa tikus takut kucing? Karena kucing punya skill 'catch mouse'! 🐭🐈",
+      "Apa yang lebih bahaya dari virus? Mantan yang tiba-tiba chat! 🦠📱",
+      "Kenapa burung terbang ke selatan saat musim dingin? Karena kalau jalan kaki kejauhan! 🐦❄️",
+      "Apa bedanya kamu dan printer? Printer bisa print uang (di bank), kamu cuma bisa minta! 🖨️💵",
+      "Kenapa kentang goreng enak? Karena dia sudah move on dari jadi kentang biasa! 🍟",
+      "Apa yang lebih setia dari anjing? Tagihan bulanan! 🐶💸",
+      "Kenapa kura-kura lambat? Karena dia pakai mode hemat baterai! 🐢🔋",
+      "Apa bedanya kamu dan Google Maps? Google Maps tahu jalan, kamu tahu jalan tapi males! 🗺️",
+      "Kenapa bawang bikin nangis? Karena dia cerita masa lalunya yang sedih! 🧅😭",
+      "Apa yang lebih mahal dari iPhone? Biaya hidup! 📱💸",
+      "Kenapa kupu-kupu cantik? Karena dia sudah glow up dari ulat! 🦋✨",
+      "Apa bedanya kamu dan Netflix? Netflix ada yang nonton, kamu ada yang ghosting! 🎬👻",
+      "Kenapa es krim enak? Karena dia cool! 🍦😎",
+      "Apa yang lebih panjang dari jalan tol? Jalan pikiran overthinking! 🛣️🧠",
+      "Kenapa kaktus berduri? Karena dia pernah sakit hati! 🌵💔",
+      "Apa bedanya kamu dan Spotify? Spotify ada premium, kamu ada masalah! 🎵😅",
+      "Kenapa coklat manis? Karena dia tidak pernah kenal yang namanya toxic relationship! 🍫❤️",
+      "Apa yang lebih cepat dari Gojek? Kabar buruk! 🏍️💨",
+      "Kenapa pizza bulat tapi kotaknya kotak? Karena hidup memang penuh misteri! 🍕📦",
+      "Apa bedanya kamu dan ATM? ATM bisa keluarin duit, kamu cuma bisa keluarin alasan! 🏧💵"
     ];
   }
 
   async execute(m, sock) {
     try {
       const randomJoke = this.jokes[Math.floor(Math.random() * this.jokes.length)];
-      
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: `*JOKES* 😂\n\n${randomJoke}\n\n> Ketik .jokes lagi untuk lelucon lainnya!` 
-      });
-
+      await sock.sendMessage(m.key.remoteJid, { text: `😂 *JOKES TIME*\n\n${randomJoke}` });
     } catch (error) {
-      await sock.sendMessage(m.key.remoteJid, { 
-        text: `*JOKES*\n\n❌ Error: ${error.message}` 
-      });
+      await sock.sendMessage(m.key.remoteJid, { text: '❌ Gagal mengambil jokes!' });
     }
   }
 }

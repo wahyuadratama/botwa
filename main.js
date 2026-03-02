@@ -1,4 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({
+  path: __dirname + '/.env'
+});
 const OpenAI = require('openai');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
@@ -242,8 +244,6 @@ async function connectToWhatsApp() {
         console.log('[CMD] Feature found:', !!feature);
         if (feature && feature.ownerOnly) {
           await feature.execute(m, sock);
-        } else if (!feature) {
-          await sock.sendMessage(chatId, { text: '❌ Command tidak ditemukan! Ketik .help untuk melihat daftar command.' });
         }
       } else if (body.startsWith(config.userPrefix)) {
         console.log('[CMD] User command detected');
@@ -253,10 +253,6 @@ async function connectToWhatsApp() {
         console.log('[CMD] Feature found:', !!feature);
         if (feature && !feature.ownerOnly) {
           await feature.execute(m, sock);
-        } else if (feature && feature.ownerOnly) {
-          await sock.sendMessage(chatId, { text: '⛔ Command ini hanya untuk owner!' });
-        } else {
-          await sock.sendMessage(chatId, { text: '❌ Command tidak ditemukan! Ketik .help untuk melihat daftar command.' });
         }
       } else {
         console.log('[CMD] No prefix detected. Body starts with:', body.substring(0, 3));
