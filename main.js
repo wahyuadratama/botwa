@@ -225,8 +225,8 @@ async function connectToWhatsApp() {
         }
       }
       
-      // Handle AI chat with 'wahyu' keyword or .ai command
-      if (body.toLowerCase().startsWith('wahyu') || body.toLowerCase().startsWith('.ai ')) {
+      // Handle AI chat with 'wahyu' keyword only
+      if (body.toLowerCase().startsWith('wahyu')) {
         console.log('[CMD] AI command detected');
         const aiFeature = features.get('ai');
         if (aiFeature) {

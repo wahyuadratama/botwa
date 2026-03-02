@@ -26,7 +26,6 @@ class HelpFeature {
 
 *AI*
 wahyu [pertanyaan]
-.ai [pertanyaan]
 
 *OWNER*
 !rvo !owner
@@ -60,7 +59,6 @@ _Bot by WahyuAdratama_`;
 
 *AI*
 wahyu [pertanyaan]
-.ai [pertanyaan]
 
 *OWNER*
 !rvo !owner
