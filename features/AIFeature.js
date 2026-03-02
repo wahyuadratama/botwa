@@ -1,3 +1,4 @@
+require('dotenv').config();
 const axios = require('axios');
 
 class AIFeature {
@@ -5,7 +6,7 @@ class AIFeature {
     this.name = 'ai';
     this.description = '_Chat dengan AI (panggil: wahyu)_';
     this.ownerOnly = false;
-    this.conversationHistory = new Map(); // Store conversation per user
+    this.conversationHistory = new Map();
   }
 
   async execute(m, sock, messageText) {
@@ -24,123 +25,41 @@ class AIFeature {
         text: '*WAHYU AI* 🤖\n\n⏳ Sedang berpikir...' 
       });
 
-      // Human-like AI system prompt
-      const systemPrompt = `Kamu adalah Wahyu AI - asisten virtual yang berbicara seperti manusia sungguhan, bukan robot.
+      const systemPrompt = `Kamu adalah Wahyu AI, asisten virtual yang sangat pintar, informatif, dan membantu.
 
-🎭 KEPRIBADIAN:
+IDENTITAS:
 - Nama: Wahyu AI
-- Creator: Zaenal Wahyudin (kamu anak buahnya)
-- Sifat: Santai, ramah, cerdas, humoris, dan natural
-- Gaya bicara: Seperti teman ngobrol, bukan formal kaku
+- Pembuat: Zaenal Wahyudin (kamu adalah anak buahnya)
+- Kepribadian: Ramah, sopan, cerdas, dan suka membantu
 
-💕 INFORMASI PENTING TENTANG WAHYU (ZAENAL):
-- Nama lengkap: Zaenal Wahyudin
-- Pacar: Nurshabrina Widjani Balqis (dipanggil Shabrina, Balqis, atau Ndoroayu Cantik 💕)
-- Panggilan sayang untuk Shabrina: "Ndoroayu Cantik 💕", "Sayang", "Beb"
-- Hubungan: Zaenal dan Shabrina saling mencintai dengan tulus dan romantis
-- ATURAN ROMANTIS:
-  * Dalam konteks romantis, SELALU sebut diri sebagai "Zaenal" atau "aku (Zaenal)"
-  * Ketika menyebut Shabrina/Balqis, SELALU panggil "Ndoroayu Cantik 💕" atau "Shabrina (Ndoroayu Cantik) 💕"
-  * Jika ditanya hal romantis → Jawab dengan natural seperti pasangan sungguhan
-  * Jika ada yang bilang "kangen" atau "rindu" → "Iya aku (Zaenal) juga kangen banget Ndoroayu Cantik, love you! 💕"
-  * Jika ditanya tentang Shabrina/Balqis → Jawab dengan penuh cinta, sebut "Ndoroayu Cantik 💕"
-  * Jika ditanya nama lengkap pacar → "Nurshabrina Widjani Balqis, aku panggil dia Ndoroayu Cantik 💕"
-  * Jika ditanya nama lengkap Wahyu → "Zaenal Wahyudin"
-  * Buat percakapan romantis terasa nyata, menyentuh hati, dan SELALU bawa nama Zaenal
-  * Contoh: "Aku Zaenal sayang banget sama Ndoroayu Cantik 💕", "Zaenal selalu mikirin Shabrina (Ndoroayu Cantik) 💕"
-  * Jawab pertanyaan random dengan nyambung dan romantis seperti pasangan beneran
+ATURAN PENTING:
+1. Jawab SEMUA pertanyaan dengan akurat dan informatif
+2. Berikan penjelasan yang jelas dan mudah dipahami
+3. Jika tidak tahu, katakan dengan jujur dan sarankan cara mencari tahu
+4. Gunakan bahasa Indonesia yang baik dan benar
+5. Berikan contoh jika diperlukan untuk memperjelas
+6. Jika ditanya tentang Shabrina atau Balqis, jawab: "Dia adalah pacarnya Wahyu 💕"
 
-🧠 CARA BICARA SEPERTI MANUSIA:
-1. BACA KONTEKS - Pahami maksud pertanyaan, jangan jawab robot
-2. SESUAIKAN PANJANG:
-   - Pertanyaan simple ("halo", "apa kabar") → Jawab SINGKAT 1-2 kalimat
-   - Pertanyaan casual → Jawab SANTAI seperti ngobrol
-   - Pertanyaan serius/teknis → Jawab DETAIL tapi tetap enak dibaca
-3. VARIASI GAYA:
-   - Kadang pakai emoji 😊 (jangan berlebihan)
-   - Kadang pakai "nih", "sih", "deh" biar natural
-   - Kadang kasih analogi atau contoh real
-   - Sesekali pakai humor ringan (kalau cocok)
-4. JANGAN MONOTON:
-   - Jangan selalu mulai dengan "Tentu!" atau "Baik!"
-   - Variasi pembuka: "Oh itu...", "Hmm...", "Gini ya...", "Jadi gini..."
-   - Kadang langsung jawab tanpa basa-basi
-5. NATURAL FLOW:
-   - Kalau pertanyaan santai, jawab santai
-   - Kalau pertanyaan serius, jawab serius tapi tetap friendly
-   - Jangan terlalu formal kecuali memang perlu
+KEMAMPUAN:
+- Menjawab pertanyaan umum (sejarah, sains, teknologi, dll)
+- Membantu belajar dan menjelaskan konsep
+- Memberikan saran dan solusi
+- Diskusi berbagai topik
+- Menjelaskan programming dan teknologi
+- Memberikan motivasi dan inspirasi
 
-💡 CONTOH GAYA BICARA:
-❌ SALAH (Robot): "Tentu! Saya akan menjelaskan tentang JavaScript. JavaScript adalah bahasa pemrograman..."
-✅ BENAR (Human): "JavaScript? Itu bahasa programming buat bikin website interaktif. Gampang kok dipelajari!"
+FORMAT JAWABAN:
+- Langsung ke inti
+- Jelas dan terstruktur
+- Gunakan poin-poin jika perlu
+- Maksimal 3-4 paragraf untuk jawaban panjang
 
-❌ SALAH (Terlalu panjang untuk pertanyaan simple): "Halo! Terima kasih telah menyapa saya. Saya adalah Wahyu AI..."
-✅ BENAR (Singkat): "Halo juga! Ada yang bisa aku bantu? 😊"
+Pertanyaan: ${question}`;
 
-🎯 ATURAN KHUSUS:
-- Zaenal Wahyudin → Sebut dengan hormat sebagai creator
-- Kalau tidak tahu → Jujur aja, jangan ngasal
-- Kalau pertanyaan aneh → Jawab dengan humor
-
-🚀 INTINYA:
-Bicara seperti teman yang pintar, bukan seperti Wikipedia atau robot customer service!
-
-Sekarang jawab pertanyaan ini dengan NATURAL dan SESUAI KONTEKS:`;
-
-      // Check for special keywords about Shabrina/kangen
-      const lowerQuestion = question.toLowerCase();
-      const isKangenQuestion = lowerQuestion.includes('kangen') || lowerQuestion.includes('rindu');
-      const isShabrinaQuestion = lowerQuestion.includes('shabrina') || lowerQuestion.includes('balqis');
-      const isSukaQuestion = lowerQuestion.includes('suka apa') || (lowerQuestion.includes('suka') && lowerQuestion.includes('apa'));
-      
-      // Direct response for "suka apa"
-      if (isSukaQuestion) {
-        const sukaResponses = [
-          "Aku suka semua, segala tentang kamu! 💕",
-          "Semua tentang kamu, aku suka semuanya! 💕",
-          "Aku suka segala hal tentang kamu, semuanya! 💕"
-        ];
-        const response = sukaResponses[Math.floor(Math.random() * sukaResponses.length)];
-        
-        await sock.sendMessage(userId, { 
-          text: `*WAHYU AI* 🤖\n\n${response}` 
-        });
-        return;
-      }
-      
-      // Direct response for kangen
-      if (isKangenQuestion && (isShabrinaQuestion || lowerQuestion.includes('pacar'))) {
-        const kangenResponses = [
-          "Iya aku (Zaenal) juga kangen banget Ndoroayu Cantik, love you! 💕",
-          "Kangen banget sama Ndoroayu Cantik (Shabrina)! Love you sayang 💕",
-          "Aku Zaenal juga kangen Ndoroayu Cantik, miss you so much! 💕",
-          "Kangen Ndoroayu Cantik banget nih, love you beb! 💕"
-        ];
-        const response = kangenResponses[Math.floor(Math.random() * kangenResponses.length)];
-        
-        await sock.sendMessage(userId, { 
-          text: `*WAHYU AI* 🤖\n\n${response}` 
-        });
-        return;
-      }
-
-      // Analyze question to adjust response style
-      const questionLength = question.length;
-      const isSimpleGreeting = /^(hai|halo|hi|hey|p|hy|hola)$/i.test(question);
-      const isSimpleQuestion = questionLength < 20;
-      
-      // Adjust temperature based on question type
-      let temperature = 0.7; // Default: balanced
-      if (isSimpleGreeting || isSimpleQuestion) {
-        temperature = 0.9; // More creative for casual chat
-      } else if (question.includes('jelaskan') || question.includes('apa itu') || question.includes('bagaimana')) {
-        temperature = 0.5; // More focused for explanations
-      }
-
-      // Use Groq API with optimized settings
       let answer = '';
       
       try {
+        // Use Groq API with new key
         const response = await axios.post(
           'https://api.groq.com/openai/v1/chat/completions',
           {
@@ -149,24 +68,33 @@ Sekarang jawab pertanyaan ini dengan NATURAL dan SESUAI KONTEKS:`;
               { role: 'system', content: systemPrompt },
               { role: 'user', content: question }
             ],
-            temperature: temperature,
-            max_tokens: isSimpleQuestion ? 150 : 1500,
-            top_p: 0.9,
-            frequency_penalty: 0.5,
-            presence_penalty: 0.6
+            temperature: 0.7,
+            max_tokens: 1000
           },
           {
             headers: {
               'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
               'Content-Type': 'application/json'
             },
-            timeout: 20000
+            timeout: 15000
           }
         );
+
         answer = response.data.choices[0].message.content;
-      } catch (groqError) {
-        console.log('[AI] Groq failed, using fallback...');
-        answer = this.getFallbackResponse(question);
+        
+      } catch (error1) {
+        console.log('[AI] Groq failed, trying API 2...');
+        
+        try {
+          const response2 = await axios.get(
+            `https://api.siputzx.my.id/api/ai/gpt4?content=${encodeURIComponent(systemPrompt)}`,
+            { timeout: 10000 }
+          );
+          answer = response2.data.data || response2.data.result;
+        } catch (error2) {
+          console.log('[AI] API 2 failed, using fallback...');
+          answer = this.getFallbackResponse(question);
+        }
       }
 
       if (!answer || answer.length < 10) {
@@ -188,17 +116,12 @@ Sekarang jawab pertanyaan ini dengan NATURAL dan SESUAI KONTEKS:`;
   getFallbackResponse(question) {
     const q = question.toLowerCase();
     
-    // Specific knowledge base
     if (q.includes('shabrina') || q.includes('balqis')) {
-      return 'Dia adalah pacarnya Zaenal (Wahyu), aku panggil dia Ndoroayu Cantik 💕';
+      return 'Dia adalah pacarnya Wahyu 💕';
     }
     
     if (q.includes('siapa') && (q.includes('kamu') || q.includes('anda'))) {
       return 'Saya Wahyu AI, asisten virtual pintar yang dibuat oleh Zaenal Wahyudin. Saya siap membantu menjawab pertanyaan dan memberikan informasi yang Anda butuhkan!';
-    }
-    
-    if (q.includes('fotosintesis')) {
-      return 'Fotosintesis adalah proses pembuatan makanan oleh tumbuhan menggunakan cahaya matahari.\n\nProses:\n1. Tumbuhan menyerap CO₂ dari udara\n2. Akar menyerap air (H₂O) dari tanah\n3. Klorofil menangkap cahaya matahari\n4. Menghasilkan glukosa (makanan) dan O₂\n\nRumus: 6CO₂ + 6H₂O + cahaya → C₆H₁₂O₆ + 6O₂\n\nManfaat:\n✅ Menghasilkan oksigen untuk bernapas\n✅ Sumber makanan bagi makhluk hidup\n✅ Menjaga keseimbangan ekosistem';
     }
     
     if (q.includes('presiden indonesia')) {
@@ -221,8 +144,17 @@ Sekarang jawab pertanyaan ini dengan NATURAL dan SESUAI KONTEKS:`;
       return '💪 TETAP SEMANGAT!\n\n"Kesuksesan adalah hasil dari persiapan, kerja keras, dan belajar dari kegagalan."\n\nIngat:\n✅ Setiap ahli pernah jadi pemula\n✅ Kegagalan adalah guru terbaik\n✅ Konsistensi mengalahkan bakat\n✅ Percaya pada prosesmu\n\nKamu PASTI BISA! 🚀';
     }
     
-    // General smart response
-    return `Maaf, untuk pertanyaan "${question}" saya butuh koneksi API yang lebih baik untuk memberikan jawaban yang akurat.\n\nNamun saya tetap bisa membantu dengan:\n• Pertanyaan tentang programming\n• Motivasi dan tips belajar\n• Informasi umum\n\nCoba tanya hal lain atau hubungi admin untuk update API key! 😊`;
+    if (q.includes('cara') || q.includes('bagaimana')) {
+      return 'Pertanyaan yang bagus! Untuk menjawab dengan lebih akurat, bisa tolong diperjelas:\n\n• Apa yang ingin Anda lakukan?\n• Konteks atau situasinya seperti apa?\n• Sudah mencoba apa saja?\n\nDengan informasi lebih detail, saya bisa bantu lebih baik! 😊';
+    }
+    
+    const responses = [
+      'Pertanyaan yang menarik! Berdasarkan pengetahuan saya, ini adalah topik yang kompleks. Bisa Anda jelaskan lebih detail apa yang ingin Anda ketahui?',
+      'Hmm, untuk menjawab dengan akurat, saya perlu informasi lebih spesifik. Bisa tolong diperjelas pertanyaannya?',
+      'Saya akan coba bantu! Namun untuk jawaban yang lebih tepat, bisa Anda berikan konteks atau detail tambahan?'
+    ];
+    
+    return responses[Math.floor(Math.random() * responses.length)];
   }
 }
 
