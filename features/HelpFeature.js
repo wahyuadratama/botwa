@@ -16,7 +16,7 @@ class HelpFeature {
 
 *FUN*
 .dice .coin .quotes
-.jokes .facts .lovecalc
+.jokes .facts
 
 *PRODUCTIVITY*
 .note - Catatan pribadi
@@ -28,7 +28,7 @@ class HelpFeature {
 wahyu [pertanyaan]
 
 *OWNER*
-!rvo !owner
+!rvo !owner !bot
 
 _Bot by WahyuAdratama_`;
 
@@ -49,7 +49,7 @@ _Bot by WahyuAdratama_`;
 
 *FUN*
 .dice .coin .quotes
-.jokes .facts .lovecalc
+.jokes .facts
 
 *PRODUCTIVITY*
 .note - Catatan pribadi
@@ -61,7 +61,7 @@ _Bot by WahyuAdratama_`;
 wahyu [pertanyaan]
 
 *OWNER*
-!rvo !owner
+!rvo !owner !bot
 
 _Bot by WahyuAdratama_`;
 

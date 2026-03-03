@@ -225,6 +225,35 @@ async function connectToWhatsApp() {
         }
       }
       
+      // Check if bot is enabled in this group (for groups not in whitelist)
+      const botControlFeature = features.get('bot');
+      if (chatId.endsWith('@g.us')) {
+        // If group is disabled, only allow !bot command from owner
+        if (botControlFeature && botControlFeature.isGroupDisabled(chatId)) {
+          if (body.toLowerCase().startsWith('!bot') && isOwner) {
+            const feature = features.get('bot');
+            if (feature) {
+              await feature.execute(m, sock);
+            }
+          }
+          return;
+        }
+        
+        // If whitelist is enabled and group is not in whitelist, check if group is enabled
+        if (config.useWhitelist && !config.allowedGroups.includes(chatId)) {
+          if (!botControlFeature || !botControlFeature.isGroupEnabled(chatId)) {
+            // Only allow !bot enable command from owner
+            if (body.toLowerCase().startsWith('!bot') && isOwner) {
+              const feature = features.get('bot');
+              if (feature) {
+                await feature.execute(m, sock);
+              }
+            }
+            return;
+          }
+        }
+      }
+      
       // Handle AI chat with 'wahyu' keyword only
       if (body.toLowerCase().startsWith('wahyu')) {
         console.log('[CMD] AI command detected');
