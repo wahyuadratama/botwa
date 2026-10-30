@@ -156,7 +156,8 @@ class WerewolfFeature {
   // ============================================================ router
   async execute(m, sock) {
     try {
-      if (m.key.fromMe) return;
+      // CATATAN: fromMe TIDAK diabaikan — owner mengendalikan bot dari nomor bot itu sendiri,
+      // dan pesan bot tidak pernah diawali prefix ".ww" sehingga tidak ada risiko loop.
       this.sock = sock;
 
       const chatId = m.key.remoteJid;
