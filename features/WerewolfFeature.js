@@ -22,6 +22,12 @@
  * bisa memulai (.ww mulai), melewati fase (.ww skip), dan membatalkan (.ww batal).
  * Pemain join dengan nickname: .ww join <nickname> (ditampilkan di semua daftar).
  */
+const fs = require('fs');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const execFileAsync = promisify(execFile);
+
 class WerewolfFeature {
   constructor() {
     this.name = 'ww';
@@ -68,6 +74,7 @@ class WerewolfFeature {
     return (
       m.message.conversation ||
       m.message.extendedTextMessage?.text ||
+      m.message.imageMessage?.caption ||
       ''
     );
   }
@@ -218,6 +225,8 @@ class WerewolfFeature {
         case 'skip': return this.cmdSkip(chatId, sender, m);
         case 'tes': return this.cmdTes(chatId, sender, name, args, m);
         case 'stop': return this.cmdStop(chatId, sender);
+        case 'nick': return this.cmdNick(chatId, sender, args, m);
+        case 'foto': return this.cmdFoto(chatId, sender, name, m);
         case 'mangsa': return this.nightAction(sender, 'serigala', args, m);
         case 'terawang': return this.nightAction(sender, 'dukun', args, m);
         case 'lindungi': return this.nightAction(sender, 'dokter', args, m);
@@ -249,6 +258,126 @@ class WerewolfFeature {
     await this.dm(game.moderator.jid, `🎤 ${text}`);
   }
 
+  // ============================================================ foto pemain
+  safeFile(s) {
+    return String(s).replace(/[^a-zA-Z0-9]/g, '_');
+  }
+
+  photoPath(game, jid) {
+    return `/tmp/ww_${this.safeFile(game.chatId)}_${this.safeFile(jid)}.webp`;
+  }
+
+  deadPhotoPath(game, jid) {
+    return `/tmp/ww_dead_${this.safeFile(game.chatId)}_${this.safeFile(jid)}.webp`;
+  }
+
+  async downloadPhoto(m) {
+    return downloadMediaMessage(
+      m, 'buffer', {},
+      { logger: console, reuploadRequest: this.sock.updateMediaMessage }
+    );
+  }
+
+  async compressPhoto(buffer, outPath) {
+    // Kompres ke webp < 200KB (coba turunkan kualitas/lebar sampai cukup kecil)
+    const tmpIn = `/tmp/ww_in_${Date.now()}_${Math.floor(Math.random() * 1e6)}.bin`;
+    fs.writeFileSync(tmpIn, buffer);
+    try {
+      let q = 75, size = 512;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await execFileAsync(
+          'ffmpeg',
+          ['-y', '-i', tmpIn, '-vf', `scale=${size}:-1`, '-c:v', 'libwebp', '-q:v', String(q), outPath],
+          { timeout: 30000 }
+        );
+        if (fs.statSync(outPath).size < 200 * 1024) return true;
+        q -= 15;
+        if (q < 20) { q = 20; size = 384; }
+      }
+      return fs.statSync(outPath).size < 200 * 1024;
+    } catch (e) {
+      console.error('[WW] kompres foto gagal:', e.message);
+      return false;
+    } finally {
+      try { fs.unlinkSync(tmpIn); } catch (e) {}
+    }
+  }
+
+  async makeDeadPhoto(srcPath, dstPath) {
+    // Foto eliminasi: hitam-putih + X merah
+    // (hue=s=0 dipakai, bukan format=gray, supaya X merah tidak ikut jadi abu-abu)
+    try {
+      await execFileAsync(
+        'ffmpeg',
+        ['-y', '-i', srcPath, '-vf',
+          "hue=s=0,drawtext=text='X':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=220:fontcolor=red:borderw=6:bordercolor=white:x=(w-text_w)/2:y=(h-text_h)/2",
+          '-c:v', 'libwebp', '-q:v', '80', dstPath],
+        { timeout: 30000 }
+      );
+      return fs.existsSync(dstPath);
+    } catch (e) {
+      console.error('[WW] dead photo gagal:', e.message);
+      return false;
+    }
+  }
+
+  clearPhotos(game) {
+    if (!game) return;
+    for (const p of game.players.values()) {
+      for (const f of [this.photoPath(game, p.jid), this.deadPhotoPath(game, p.jid)]) {
+        try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
+      }
+    }
+  }
+
+  findLobbyByPlayer(sender) {
+    for (const game of this.games.values()) {
+      if (game.phase === 'lobby' && !game.isTest && game.players.has(sender)) return game;
+    }
+    return null;
+  }
+
+  async maybeComplete(game, p) {
+    // Jika nickname + foto sudah lengkap -> konfirmasi di grup beserta fotonya
+    if (p.nick && p.photo && !p.announced) {
+      p.announced = true;
+      const doneCount = [...game.players.values()].filter((x) => x.nick && x.photo).length;
+      const caption = `✅ *${p.nick}* resmi ikut main! (${doneCount} pemain)`;
+      try {
+        await this.sock.sendMessage(game.chatId, {
+          image: { url: p.photo },
+          caption,
+          mentions: [p.jid],
+        });
+      } catch (e) {
+        console.error('[WW] kirim foto join gagal:', e.message);
+        await this.send(game.chatId, caption, [p.jid]);
+      }
+    }
+  }
+
+  async sendElimination(game, victim, caption) {
+    // Pengumuman eliminasi: foto hitam-putih + X merah (fallback teks jika gagal)
+    const deadPath = this.deadPhotoPath(game, victim.jid);
+    let ok = false;
+    if (victim.photo && fs.existsSync(victim.photo)) {
+      ok = await this.makeDeadPhoto(victim.photo, deadPath);
+    }
+    if (ok) {
+      try {
+        await this.sock.sendMessage(game.chatId, {
+          image: { url: deadPath },
+          caption,
+          mentions: [victim.jid],
+        });
+        return;
+      } catch (e) {
+        console.error('[WW] kirim foto eliminasi gagal:', e.message);
+      }
+    }
+    await this.send(game.chatId, caption, [victim.jid]);
+  }
+
   // ============================================================ perintah grup
   async cmdBantu(chatId, m) {
     const inGroup = this.isGroup(chatId);
@@ -256,7 +385,7 @@ class WerewolfFeature {
       chatId,
       '🐺 *WEREWOLF — Panduan*\n\n' +
         (inGroup
-          ? '*Di grup:*\n.ww baru [nickname] — buka lobby (kamu jadi 🎤 moderator)\n.ww join <nickname> — ikut main\n.ww mulai — mulai game (moderator saja, min. 2 pemain, ideal 7+)\n.ww skip — lewati fase saat ini (moderator saja)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan game (moderator saja)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
+          ? '*Di grup:*\n.ww baru [nickname] — buka lobby (kamu jadi 🎤 moderator)\n.ww join [nickname] — ikut main (lengkapi data via DM)\n.ww mulai — mulai game (moderator saja, min. 2 pemain, ideal 7+)\n.ww skip — lewati fase saat ini (moderator saja)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan game (moderator saja)\n\n*Di DM (chat pribadi bot):*\n.ww nick <nickname> — isi nickname\n.ww foto — kirim *FOTO* dengan caption ini (foto selfie)\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
           : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n.ww skip — lewati fase (sesi tes)\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
         'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.\n' +
@@ -273,6 +402,7 @@ class WerewolfFeature {
     if (cur && cur.phase !== 'ended') {
       return this.send(chatId, 'Di grup ini sudah ada game yang berjalan.');
     }
+    if (cur) this.clearPhotos(cur); // bersihkan sisa foto game sebelumnya
     const nick = this.cleanNick(args.join(' ')) || this.cleanNick(name) || 'Moderator';
     this.games.set(chatId, {
       chatId, creator: sender, phase: 'lobby',
@@ -306,20 +436,92 @@ class WerewolfFeature {
     if (game.moderator && sender === game.moderator.jid) {
       return this.send(chatId, 'Kamu moderator game ini — tidak bisa ikut main. 😄');
     }
-    if (game.players.has(sender)) return this.send(chatId, 'Kamu sudah ikut.');
+    if (game.players.has(sender)) {
+      const ex = game.players.get(sender);
+      if (ex.nick && ex.photo) return this.send(chatId, 'Kamu sudah ikut dan datamu lengkap. ✅');
+      return this.send(chatId, 'Kamu sudah join — lengkapi datamu via DM bot ya! 📩');
+    }
     if (game.players.size >= this.MAX_PLAYERS) {
       return this.send(chatId, `Lobby penuh (maks. ${this.MAX_PLAYERS}).`);
     }
-    const nick = this.cleanNick(args.join(' ')) || this.cleanNick(name) || 'Pemain';
+    // Nickname boleh langsung di .ww join, atau nanti via DM (.ww nick)
+    let nick = null;
+    const nickArg = this.cleanNick(args.join(' '));
+    if (nickArg) {
+      const low = nickArg.toLowerCase();
+      const taken =
+        [...game.players.values()].some((p) => p.nick && p.nick.toLowerCase() === low) ||
+        (game.moderator && game.moderator.nick.toLowerCase() === low);
+      if (taken) {
+        return this.send(chatId, `Nickname *${nickArg}* sudah dipakai. Coba *.ww join* saja lalu pilih via DM, atau pakai nickname lain.`);
+      }
+      nick = nickArg;
+    }
+    const p = {
+      jid: sender, name: nick || this.cleanNick(name) || 'Pemain',
+      nick, photo: null, announced: false, role: 'warga', alive: true,
+    };
+    game.players.set(sender, p);
+
+    // Minta lengkapi via DM
+    const steps = [];
+    if (!nick) steps.push('1️⃣ *Nickname* — balas:\n*.ww nick <nickname>*\nContoh: *.ww nick Ucul*');
+    steps.push(`${nick ? '1️⃣' : '2️⃣'} *Foto selfie* — kirim *FOTO* dengan caption:\n*.ww foto*`);
+    await this.dm(
+      sender,
+      `📝 *Lengkapi data Werewolf kamu!*\n\n${steps.join('\n\n')}\n\n` +
+        `⚠️ Foto *tanpa caption* tidak terbaca oleh bot!\n\n` +
+        `Setelah lengkap, keikutsertaanmu dikonfirmasi di grup. ✅`
+    );
+    await this.send(chatId, `⏳ ${this.mentionOf(sender)} mau ikut! Lengkapi nickname + foto via DM bot ya. 📩`, [sender]);
+    // Kalau nickname sudah diisi saat join, tinggal tunggu foto
+    await this.maybeComplete(game, p);
+  }
+
+  async cmdNick(chatId, sender, args, m) {
+    if (this.isGroup(chatId)) {
+      return this.send(chatId, 'Isi nickname via *DM* (chat pribadi dengan bot), bukan di grup.');
+    }
+    const game = this.findLobbyByPlayer(sender);
+    if (!game) return this.send(chatId, 'Kamu belum join lobby mana pun. Join dulu di grup dengan *.ww join*.');
+    const nick = this.cleanNick(args.join(' '));
+    if (!nick) return this.send(chatId, 'Nickname tidak valid. Contoh: *.ww nick Ucul*');
     const low = nick.toLowerCase();
     const taken =
-      [...game.players.values()].some((p) => p.name.toLowerCase() === low) ||
+      [...game.players.values()].some((p) => p.jid !== sender && p.nick && p.nick.toLowerCase() === low) ||
       (game.moderator && game.moderator.nick.toLowerCase() === low);
-    if (taken) {
-      return this.send(chatId, `Nickname *${nick}* sudah dipakai. Pilih yang lain: *.ww join <nickname>*`);
+    if (taken) return this.send(chatId, `Nickname *${nick}* sudah dipakai. Pilih yang lain.`);
+    const p = game.players.get(sender);
+    p.nick = nick;
+    p.name = nick;
+    await this.send(chatId, `Nickname disimpan: *${nick}* ✅` + (p.photo ? '' : '\nSelanjutnya kirim foto selfie dengan caption *.ww foto* 📸'));
+    await this.maybeComplete(game, p);
+  }
+
+  async cmdFoto(chatId, sender, name, m) {
+    if (this.isGroup(chatId)) {
+      return this.send(chatId, 'Kirim foto selfie via *DM* (chat pribadi dengan bot) untuk privasi. Jangan lupa caption: *.ww foto*');
     }
-    game.players.set(sender, { jid: sender, name: nick, role: 'warga', alive: true });
-    await this.send(chatId, `✅ *${nick}* ikut main! (${game.players.size} pemain)`);
+    const game = this.findLobbyByPlayer(sender);
+    if (!game) return this.send(chatId, 'Kamu belum join lobby mana pun. Join dulu di grup dengan *.ww join*.');
+    if (!m.message.imageMessage) {
+      return this.send(chatId, 'Kirim *FOTO* (bukan teks) dengan caption *.ww foto* 📸');
+    }
+    const p = game.players.get(sender);
+    await this.send(chatId, '⏳ Memproses foto...');
+    let buf;
+    try {
+      buf = await this.downloadPhoto(m);
+    } catch (e) {
+      console.error('[WW] download foto gagal:', e.message);
+      return this.send(chatId, '❌ Gagal mengunduh foto. Coba kirim ulang dengan caption *.ww foto*');
+    }
+    const out = this.photoPath(game, sender);
+    const ok = await this.compressPhoto(buf, out);
+    if (!ok) return this.send(chatId, '❌ Gagal memproses foto. Coba foto lain.');
+    p.photo = out;
+    await this.send(chatId, 'Foto tersimpan! ✅' + (p.nick ? '' : '\nJangan lupa nickname: *.ww nick <nickname>*'));
+    await this.maybeComplete(game, p);
   }
 
   async cmdBatal(chatId, sender, m) {
@@ -329,6 +531,7 @@ class WerewolfFeature {
       return this.send(chatId, 'Hanya moderator yang bisa membatalkan game.');
     }
     this.clearTimer(game);
+    this.clearPhotos(game);
     game.phase = 'ended';
     await this.send(chatId, 'Game dibatalkan oleh moderator.');
   }
@@ -360,6 +563,19 @@ class WerewolfFeature {
     if (!game || game.phase !== 'lobby') return this.send(chatId, 'Belum ada lobby yang dibuka.');
     if (!this.isModerator(game, sender, m)) {
       return this.send(chatId, 'Hanya *moderator* yang bisa memulai game.');
+    }
+    // Semua pemain wajib lengkap (nickname + foto) sebelum mulai
+    const incomplete = [...game.players.values()].filter((p) => !(p.nick && p.photo));
+    if (incomplete.length) {
+      const lines = incomplete.map((p) => {
+        const need = [!p.nick && 'nickname', !p.photo && 'foto selfie'].filter(Boolean).join(' + ');
+        return `• ${this.mentionOf(p.jid)} — kurang ${need}`;
+      });
+      return this.send(
+        chatId,
+        `⏳ *Belum bisa mulai!*\n\nYang belum lengkap:\n${lines.join('\n')}\n\nLengkapi via DM bot dulu ya! 📩`,
+        incomplete.map((p) => p.jid)
+      );
     }
     if (game.players.size < this.MIN_PLAYERS) {
       return this.send(chatId, `Pemain kurang — butuh min. ${this.MIN_PLAYERS}, baru ada ${game.players.size}.`);
@@ -549,10 +765,10 @@ class WerewolfFeature {
       await this.notifyMod(game, 'Pagi: serangan serigala digagalkan dokter. Tidak ada korban.');
     } else if (korban) {
       korban.alive = false;
-      await this.send(
-        game.chatId,
-        `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
-        game.isTest ? undefined : [korban.jid]
+      await this.sendElimination(
+        game,
+        korban,
+        `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`
       );
       await this.notifyMod(game, `Pagi: ${korban.name} mati — ia ${this.ROLE_LABEL[korban.role]}.`);
     } else {
@@ -830,10 +1046,10 @@ class WerewolfFeature {
       t.alive = false;
       let count = 0;
       for (const x of valid.values()) if (x === targetJid) count++;
-      await this.send(
-        game.chatId,
-        `⚖️ Hasil voting: ${this.disp(game, t)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
-        game.isTest ? undefined : [t.jid]
+      await this.sendElimination(
+        game,
+        t,
+        `⚖️ Hasil voting: ${this.disp(game, t)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`
       );
       await this.notifyMod(game, `Voting: ${t.name} tersingkir (${count} suara) — ia ${this.ROLE_LABEL[t.role]}.`);
     } else {
@@ -848,6 +1064,7 @@ class WerewolfFeature {
 
   async endGame(game, winner) {
     this.clearTimer(game);
+    this.clearPhotos(game);
     game.phase = 'ended';
     const lines = [...game.players.values()].map(
       (p) => `${p.alive ? '✅' : '💀'} ${p.name} — ${this.ROLE_LABEL[p.role]}`

@@ -20,7 +20,7 @@ class HelpFeature {
 
 *GAME* 🐺
 .ww baru [nickname] - Buka lobby (jadi moderator)
-.ww join <nickname> - Ikut main
+.ww join [nickname] - Ikut main (lengkapi via DM)
 .ww mulai - Mulai game (moderator)
 .ww skip - Lewati fase (moderator)
 .ww vote <nomor> - Voting siang hari
@@ -61,7 +61,7 @@ _Bot by WahyuAdratama_`;
 
 *GAME* 🐺
 .ww baru [nickname] - Buka lobby (jadi moderator)
-.ww join <nickname> - Ikut main
+.ww join [nickname] - Ikut main (lengkapi via DM)
 .ww mulai - Mulai game (moderator)
 .ww skip - Lewati fase (moderator)
 .ww vote <nomor> - Voting siang hari
