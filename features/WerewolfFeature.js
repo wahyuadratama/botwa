@@ -18,15 +18,10 @@
  * Alur otomatis: lobby -> peran via DM -> malam (aksi via DM) ->
  * pagi (pengumuman) -> diskusi (timer) -> voting -> ulangi sampai menang.
  *
- * Bot juga bersuara 🎙️ sebagai narator otomatis (voice note) di momen penting.
- * Matikan via env WW_VOICE_OFF=1.
+ * Pembuat lobby (.ww baru) menjadi MODERATOR: memandu game, tidak ikut main,
+ * bisa memulai (.ww mulai), melewati fase (.ww skip), dan membatalkan (.ww batal).
+ * Pemain join dengan nickname: .ww join <nickname> (ditampilkan di semua daftar).
  */
-const path = require('path');
-const fs = require('fs');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
-
 class WerewolfFeature {
   constructor() {
     this.name = 'ww';
@@ -44,20 +39,11 @@ class WerewolfFeature {
     this.VOTE_MS = 90000;
     this.DM_DELAY_MS = 700;
 
-    // Narator suara (voice note). Matikan: env WW_VOICE_OFF=1
-    this.VOICE = !process.env.WW_VOICE_OFF;
-    this.TTS_SCRIPT = path.join(__dirname, '..', 'utils', 'tts.py');
     // Mode tes solo (di DM): .ww tes [jumlah]
     this.TEST_NIGHT_MS = 60000;
     this.TEST_DISCUSS_MS = 45000;
     this.TEST_VOTE_MS = 45000;
     this.TEST_NAMES = ['Budi', 'Ani', 'Candra', 'Dewi', 'Eko', 'Fajar', 'Gita', 'Hadi', 'Intan', 'Joko', 'Kirana'];
-    this.ROLE_SUARA = {
-      serigala: 'serigala',
-      dukun: 'dukun',
-      dokter: 'dokter',
-      warga: 'warga biasa',
-    };
 
     this.ROLE_LABEL = {
       serigala: '🐺 Serigala',
@@ -123,27 +109,6 @@ class WerewolfFeature {
       console.error('[WW] DM gagal ke', userJid, ':', e.message);
       return false;
     }
-  }
-
-  sendVoice(chatId, text) {
-    // Narator suara (voice note). Fire-and-forget: teks tetap jadi acuan,
-    // suara hanya pemanis. Gagal diam-diam.
-    if (!this.VOICE || !this.sock) return;
-    const out = `/tmp/ww_${Date.now()}_${Math.floor(Math.random() * 1e6)}.ogg`;
-    (async () => {
-      try {
-        await execFileAsync('python3', [this.TTS_SCRIPT, text, out], { timeout: 30000 });
-        await this.sock.sendMessage(chatId, {
-          audio: { url: out },
-          mimetype: 'audio/ogg; codecs=opus',
-          ptt: true,
-        });
-      } catch (e) {
-        console.error('[WW] voice gagal:', e.message);
-      } finally {
-        try { fs.unlinkSync(out); } catch (e) {}
-      }
-    })();
   }
 
   sleep(ms) {
@@ -215,6 +180,17 @@ class WerewolfFeature {
     return players.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
   }
 
+  cleanNick(s) {
+    // Nickname: satu baris, maks 20 karakter
+    if (!s) return '';
+    return s.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 20);
+  }
+
+  isModerator(game, sender, m) {
+    if (m && m.key.fromMe) return true; // owner via nomor bot
+    return !!(game.moderator && sender === game.moderator.jid);
+  }
+
   // ============================================================ router
   async execute(m, sock) {
     try {
@@ -233,12 +209,13 @@ class WerewolfFeature {
       if (!sub || sub === 'bantu' || sub === 'help') return this.cmdBantu(chatId, m);
 
       switch (sub) {
-        case 'baru': return this.cmdBaru(chatId, sender, m);
-        case 'join': return this.cmdJoin(chatId, sender, name, m);
-        case 'mulai': return this.cmdMulai(chatId, m);
+        case 'baru': return this.cmdBaru(chatId, sender, name, args, m);
+        case 'join': return this.cmdJoin(chatId, sender, name, args, m);
+        case 'mulai': return this.cmdMulai(chatId, sender, m);
         case 'batal': return this.cmdBatal(chatId, sender, m);
         case 'status': return this.cmdStatus(chatId, m);
         case 'vote': return this.cmdVote(chatId, sender, name, args, m);
+        case 'skip': return this.cmdSkip(chatId, sender, m);
         case 'tes': return this.cmdTes(chatId, sender, name, args, m);
         case 'stop': return this.cmdStop(chatId, sender);
         case 'mangsa': return this.nightAction(sender, 'serigala', args, m);
@@ -273,16 +250,16 @@ class WerewolfFeature {
       chatId,
       '🐺 *WEREWOLF — Panduan*\n\n' +
         (inGroup
-          ? '*Di grup:*\n.ww baru — buka lobby\n.ww join — ikut main\n.ww mulai — mulai (min. 2 pemain, ideal 7+)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan (pembuat lobby)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
-          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n\n') +
+          ? '*Di grup:*\n.ww baru [nickname] — buka lobby (kamu jadi 🎤 moderator)\n.ww join <nickname> — ikut main\n.ww mulai — mulai game (moderator saja, min. 2 pemain, ideal 7+)\n.ww skip — lewati fase saat ini (moderator saja)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan game (moderator saja)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
+          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n.ww skip — lewati fase (sesi tes)\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
         'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.\n' +
-        '🎙️ Bot bersuara sebagai narator otomatis di momen penting!',
+        '🎤 Moderator memandu jalannya game (tidak ikut main).',
       null
     );
   }
 
-  async cmdBaru(chatId, sender, m) {
+  async cmdBaru(chatId, sender, name, args, m) {
     if (!this.isGroup(chatId)) {
       return this.send(chatId, 'Buat game di grup, bukan di chat pribadi. Ketik *.ww bantu* untuk panduan.');
     }
@@ -290,53 +267,82 @@ class WerewolfFeature {
     if (cur && cur.phase !== 'ended') {
       return this.send(chatId, 'Di grup ini sudah ada game yang berjalan.');
     }
+    const nick = this.cleanNick(args.join(' ')) || this.cleanNick(name) || 'Moderator';
     this.games.set(chatId, {
       chatId, creator: sender, phase: 'lobby',
+      moderator: { jid: sender, nick },
       players: new Map(), day: 0, timer: null, night: null, votes: new Map(),
     });
     await this.send(
       chatId,
-      `🐺 *LOBBY WEREWOLF dibuka!*\n\nKetik *.ww join* untuk ikut (min. ${this.MIN_PLAYERS} pemain).\nPembuat lobby mengetik *.ww mulai* kalau sudah siap.\n\n⚠️ Pastikan nomor bot ini tidak dibisukan supaya DM peran masuk!`
+      `🐺 *LOBBY WEREWOLF dibuka!*\n\n🎤 Moderator: *${nick}*\n\nKetik *.ww join <nickname>* untuk ikut (min. ${this.MIN_PLAYERS} pemain).\nContoh: *.ww join Ucul*\n\nModerator mengetik *.ww mulai* kalau sudah siap.\n\n⚠️ Pastikan nomor bot ini tidak dibisukan supaya DM peran masuk!`
     );
   }
 
-  async cmdJoin(chatId, sender, name, m) {
+  async cmdJoin(chatId, sender, name, args, m) {
     if (!this.isGroup(chatId)) return this.send(chatId, 'Join dilakukan di grup game. Ketik *.ww bantu* untuk panduan.');
     const game = this.getGame(chatId);
     if (!game || game.phase !== 'lobby') {
       return this.send(chatId, 'Belum ada lobby. Buat dulu dengan *.ww baru*.');
     }
+    if (game.moderator && sender === game.moderator.jid) {
+      return this.send(chatId, 'Kamu moderator game ini — tidak bisa ikut main. 😄');
+    }
     if (game.players.has(sender)) return this.send(chatId, 'Kamu sudah ikut.');
     if (game.players.size >= this.MAX_PLAYERS) {
       return this.send(chatId, `Lobby penuh (maks. ${this.MAX_PLAYERS}).`);
     }
-    game.players.set(sender, { jid: sender, name, role: 'warga', alive: true });
-    await this.send(chatId, `✅ ${name} ikut main! (${game.players.size} pemain)`);
+    const nick = this.cleanNick(args.join(' ')) || this.cleanNick(name) || 'Pemain';
+    const low = nick.toLowerCase();
+    const taken =
+      [...game.players.values()].some((p) => p.name.toLowerCase() === low) ||
+      (game.moderator && game.moderator.nick.toLowerCase() === low);
+    if (taken) {
+      return this.send(chatId, `Nickname *${nick}* sudah dipakai. Pilih yang lain: *.ww join <nickname>*`);
+    }
+    game.players.set(sender, { jid: sender, name: nick, role: 'warga', alive: true });
+    await this.send(chatId, `✅ *${nick}* ikut main! (${game.players.size} pemain)`);
   }
 
   async cmdBatal(chatId, sender, m) {
     const game = this.getGame(chatId);
     if (!game || game.phase === 'ended') return this.send(chatId, 'Tidak ada game yang berjalan.');
-    const isOwner = m.key.fromMe; // owner juga bisa via isFromMe; sederhana: creator saja
-    if (sender !== game.creator && !isOwner) {
-      return this.send(chatId, 'Hanya pembuat lobby yang bisa membatalkan.');
+    if (!this.isModerator(game, sender, m)) {
+      return this.send(chatId, 'Hanya moderator yang bisa membatalkan game.');
     }
     this.clearTimer(game);
     game.phase = 'ended';
-    await this.send(chatId, 'Game dibatalkan.');
+    await this.send(chatId, 'Game dibatalkan oleh moderator.');
+  }
+
+  async cmdSkip(chatId, sender, m) {
+    const game = this.getGame(chatId);
+    if (!game || game.phase === 'ended') return this.send(chatId, 'Tidak ada game yang berjalan.');
+    const allowed = game.isTest ? sender === game.testUser : this.isModerator(game, sender, m);
+    if (!allowed) return this.send(chatId, 'Hanya moderator yang bisa melewati fase.');
+    if (game.phase === 'lobby') return this.send(chatId, 'Belum ada fase berjalan (masih lobby).');
+    this.clearTimer(game);
+    await this.send(chatId, '⏭️ Fase dilewati.');
+    if (game.phase === 'night') return this.resolveNight(game);
+    if (game.phase === 'discuss') return this.startVote(game);
+    if (game.phase === 'vote') return this.resolveVote(game);
   }
 
   async cmdStatus(chatId, m) {
     const game = this.getGame(chatId);
     if (!game) return this.send(chatId, 'Belum ada game di sini.');
     const alive = this.alivePlayers(game).length;
-    await this.send(chatId, `🐺 Status: fase *${game.phase}*, hari ke-${game.day}\nPemain hidup: ${alive}/${game.players.size}`);
+    const mod = game.moderator ? `\n🎤 Moderator: *${game.moderator.nick}*` : '';
+    await this.send(chatId, `🐺 Status: fase *${game.phase}*, hari ke-${game.day}${mod}\nPemain hidup: ${alive}/${game.players.size}`);
   }
 
-  async cmdMulai(chatId, m) {
+  async cmdMulai(chatId, sender, m) {
     if (!this.isGroup(chatId)) return this.send(chatId, 'Mulai game dari grup.');
     const game = this.getGame(chatId);
     if (!game || game.phase !== 'lobby') return this.send(chatId, 'Belum ada lobby yang dibuka.');
+    if (!this.isModerator(game, sender, m)) {
+      return this.send(chatId, 'Hanya *moderator* yang bisa memulai game.');
+    }
     if (game.players.size < this.MIN_PLAYERS) {
       return this.send(chatId, `Pemain kurang — butuh min. ${this.MIN_PLAYERS}, baru ada ${game.players.size}.`);
     }
@@ -377,7 +383,6 @@ class WerewolfFeature {
         players.map((p) => this.mentionOf(p.jid)).join(' '),
       mentions
     );
-    this.sendVoice(chatId, 'Permainan Werewolf dimulai! Peran sudah dikirim ke pesan pribadi masing-masing. Jaga rahasiamu!');
     await this.startNight(game);
   }
 
@@ -429,7 +434,6 @@ class WerewolfFeature {
       game.chatId,
       `🌙 *Malam ${game.day} tiba...* semua pemain cek DM dari bot! (${this.NIGHT_MS / 1000} detik)`
     );
-    this.sendVoice(game.chatId, `Malam ${game.day} telah tiba. Warga desa, tidurlah. Para serigala, bangunlah, dan pilih mangsamu.`);
     this.clearTimer(game);
     game.timer = setTimeout(() => {
       if (game.phase === 'night') this.resolveNight(game);
@@ -516,7 +520,6 @@ class WerewolfFeature {
     const korban = targetJid && game.players.get(targetJid);
     if (korban && korban.jid === protectedJid) {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\n💉 Serangan serigala malam ini berhasil DIGAGALKAN oleh dokter!');
-      this.sendVoice(game.chatId, 'Pagi telah tiba. Serangan serigala berhasil digagalkan oleh dokter!');
     } else if (korban) {
       korban.alive = false;
       await this.send(
@@ -524,10 +527,8 @@ class WerewolfFeature {
         `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
         game.isTest ? undefined : [korban.jid]
       );
-      this.sendVoice(game.chatId, `Pagi telah tiba. ${korban.name} ditemukan tak bernyawa. Ia ternyata seorang ${this.ROLE_SUARA[korban.role]}.`);
     } else {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\nMalam yang tenang. Tidak ada korban.');
-      this.sendVoice(game.chatId, 'Pagi telah tiba. Malam yang tenang. Tidak ada korban.');
     }
 
     const winner = this.checkWinner(game);
@@ -569,7 +570,6 @@ class WerewolfFeature {
       sender,
       `🎮 *SESI TES dimulai!* (${n} pemain: kamu + ${n - 1} bot)\n\n${this.ROLE_LABEL[me.role]}\n\n${this.ROLE_DESC[me.role]}\n\nPemain lain: ${others}\n\nKetik *.ww stop* untuk berhenti kapan saja.`
     );
-    this.sendVoice(chatId, 'Sesi tes dimulai! Peranmu sudah dikirim. Selamat bermain!');
     game.day = 1;
     await this.startNight(game);
   }
@@ -614,7 +614,6 @@ class WerewolfFeature {
     }
 
     await this.send(game.chatId, `🌙 *Malam ${game.day} tiba...* (${this.TEST_NIGHT_MS / 1000} detik)`);
-    this.sendVoice(game.chatId, `Malam ${game.day} telah tiba.`);
     this.testAutoNight(game);
 
     this.clearTimer(game);
@@ -700,7 +699,6 @@ class WerewolfFeature {
       game.chatId,
       `🗳️ *VOTING!* (${this.TEST_VOTE_MS / 1000} detik)\nBalas: *.ww vote <nomor>*\n\n${this.numberedList(game.voteTargets)}`
     );
-    this.sendVoice(game.chatId, 'Voting dimulai. Tentukan siapa yang akan disingkirkan!');
     this.testAutoVote(game);
     this.clearTimer(game);
     game.timer = setTimeout(() => {
@@ -759,7 +757,6 @@ class WerewolfFeature {
       game.chatId,
       `🗳️ *VOTING!* (${this.VOTE_MS / 1000} detik)\nBalas: *.ww vote <nomor>*\n\n${this.numberedList(game.voteTargets)}`
     );
-    this.sendVoice(game.chatId, 'Voting dimulai. Tentukan siapa yang akan disingkirkan!');
     this.clearTimer(game);
     game.timer = setTimeout(() => {
       if (game.phase === 'vote') this.resolveVote(game);
@@ -809,7 +806,6 @@ class WerewolfFeature {
         `⚖️ Hasil voting: ${this.disp(game, t)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
         game.isTest ? undefined : [t.jid]
       );
-      this.sendVoice(game.chatId, `${t.name} tersingkir dengan ${count} suara. Ia ternyata seorang ${this.ROLE_SUARA[t.role]}.`);
     } else {
       await this.send(game.chatId, '⚖️ Voting seri / tidak ada suara — tidak ada yang tersingkir.');
     }
@@ -830,12 +826,6 @@ class WerewolfFeature {
         ? '🐺 *SERIGALA MENANG!* Mereka berhasil menguasai desa.'
         : '🧑 *WARGA MENANG!* Semua serigala telah tersingkir.';
     await this.send(game.chatId, `${head}\n\n*Daftar peran:*\n${lines.join('\n')}`);
-    this.sendVoice(
-      game.chatId,
-      winner === 'serigala'
-        ? 'Serigala menang! Mereka berhasil menguasai desa. Permainan selesai.'
-        : 'Warga menang! Semua serigala telah tersingkir. Permainan selesai.'
-    );
   }
 }
 

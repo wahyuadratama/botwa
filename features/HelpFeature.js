@@ -19,10 +19,11 @@ class HelpFeature {
 .jokes .facts
 
 *GAME* 🐺
-.ww baru - Buka lobby Werewolf (grup)
-.ww join - Ikut main
-.ww mulai - Mulai game (min. 2)
-.ww vote - Voting siang hari
+.ww baru [nickname] - Buka lobby (jadi moderator)
+.ww join <nickname> - Ikut main
+.ww mulai - Mulai game (moderator)
+.ww skip - Lewati fase (moderator)
+.ww vote <nomor> - Voting siang hari
 .ww bantu - Panduan Werewolf
 
 *PRODUCTIVITY*
@@ -59,10 +60,11 @@ _Bot by WahyuAdratama_`;
 .jokes .facts
 
 *GAME* 🐺
-.ww baru - Buka lobby Werewolf (grup)
-.ww join - Ikut main
-.ww mulai - Mulai game (min. 2)
-.ww vote - Voting siang hari
+.ww baru [nickname] - Buka lobby (jadi moderator)
+.ww join <nickname> - Ikut main
+.ww mulai - Mulai game (moderator)
+.ww skip - Lewati fase (moderator)
+.ww vote <nomor> - Voting siang hari
 .ww bantu - Panduan Werewolf
 
 *PRODUCTIVITY*
