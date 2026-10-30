@@ -27,7 +27,8 @@ class WerewolfFeature {
     this.games = new Map(); // groupJid -> game
     this.sock = null;
 
-    this.MIN_PLAYERS = 7;
+    this.MIN_PLAYERS = 2;
+    this.RECOMMENDED_MIN = 7;
     this.MAX_PLAYERS = 30;
     this.NIGHT_MS = 120000;
     this.DISCUSS_MS = 300000;
@@ -108,6 +109,17 @@ class WerewolfFeature {
 
   // ============================================================ logika
   makeRoles(n) {
+    // Mode tes (< 7 pemain): 1 serigala + 1 dukun + sisanya warga.
+    // Game-nya tidak seimbang — hanya untuk coba-coba mekanisme bot.
+    if (n < 7) {
+      const roles = ['serigala', 'dukun'];
+      while (roles.length < n) roles.push('warga');
+      for (let i = roles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [roles[i], roles[j]] = [roles[j], roles[i]];
+      }
+      return roles;
+    }
     const wolves = Math.max(2, Math.floor(n / 5));
     const roles = Array(wolves).fill('serigala');
     roles.push('dukun');
@@ -209,7 +221,7 @@ class WerewolfFeature {
       chatId,
       '🐺 *WEREWOLF — Panduan*\n\n' +
         (inGroup
-          ? '*Di grup:*\n.ww baru — buka lobby\n.ww join — ikut main\n.ww mulai — mulai (min. 7 pemain)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan (pembuat lobby)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
+          ? '*Di grup:*\n.ww baru — buka lobby\n.ww join — ikut main\n.ww mulai — mulai (min. 2 pemain, ideal 7+)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan (pembuat lobby)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
           : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
         'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.',
@@ -303,9 +315,12 @@ class WerewolfFeature {
 
     game.day = 1;
     const mentions = players.map((p) => p.jid);
+    const testMode = players.length < this.RECOMMENDED_MIN;
     await this.send(
       chatId,
-      `🎮 Game dimulai! ${players.size} pemain.\nPeran sudah dikirim via DM masing-masing. Jaga rahasiamu! 🤫\n\n` +
+      `🎮 Game dimulai! ${players.length} pemain.` +
+        (testMode ? `\n⚠️ *Mode TES* (pemain < ${this.RECOMMENDED_MIN}) — game tidak seimbang, hanya untuk coba-coba ya!` : '') +
+        `\nPeran sudah dikirim via DM masing-masing. Jaga rahasiamu! 🤫\n\n` +
         players.map((p) => this.mentionOf(p.jid)).join(' '),
       mentions
     );

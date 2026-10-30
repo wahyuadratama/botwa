@@ -21,7 +21,7 @@ class HelpFeature {
 *GAME* 🐺
 .ww baru - Buka lobby Werewolf (grup)
 .ww join - Ikut main
-.ww mulai - Mulai game (min. 7)
+.ww mulai - Mulai game (min. 2)
 .ww vote - Voting siang hari
 .ww bantu - Panduan Werewolf
 
@@ -61,7 +61,7 @@ _Bot by WahyuAdratama_`;
 *GAME* 🐺
 .ww baru - Buka lobby Werewolf (grup)
 .ww join - Ikut main
-.ww mulai - Mulai game (min. 7)
+.ww mulai - Mulai game (min. 2)
 .ww vote - Voting siang hari
 .ww bantu - Panduan Werewolf
 
