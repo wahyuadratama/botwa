@@ -18,6 +18,13 @@ class HelpFeature {
 .dice .coin .quotes
 .jokes .facts
 
+*GAME* 🐺
+.ww baru - Buka lobby Werewolf (grup)
+.ww join - Ikut main
+.ww mulai - Mulai game (min. 7)
+.ww vote - Voting siang hari
+.ww bantu - Panduan Werewolf
+
 *PRODUCTIVITY*
 .note - Catatan pribadi
 .poll - Buat polling (grup)
@@ -50,6 +57,13 @@ _Bot by WahyuAdratama_`;
 *FUN*
 .dice .coin .quotes
 .jokes .facts
+
+*GAME* 🐺
+.ww baru - Buka lobby Werewolf (grup)
+.ww join - Ikut main
+.ww mulai - Mulai game (min. 7)
+.ww vote - Voting siang hari
+.ww bantu - Panduan Werewolf
 
 *PRODUCTIVITY*
 .note - Catatan pribadi
