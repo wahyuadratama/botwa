@@ -47,6 +47,11 @@ class WerewolfFeature {
     // Narator suara (voice note). Matikan: env WW_VOICE_OFF=1
     this.VOICE = !process.env.WW_VOICE_OFF;
     this.TTS_SCRIPT = path.join(__dirname, '..', 'utils', 'tts.py');
+    // Mode tes solo (di DM): .ww tes [jumlah]
+    this.TEST_NIGHT_MS = 60000;
+    this.TEST_DISCUSS_MS = 45000;
+    this.TEST_VOTE_MS = 45000;
+    this.TEST_NAMES = ['Budi', 'Ani', 'Candra', 'Dewi', 'Eko', 'Fajar', 'Gita', 'Hadi', 'Intan', 'Joko', 'Kirana'];
     this.ROLE_SUARA = {
       serigala: 'serigala',
       dukun: 'dukun',
@@ -91,6 +96,11 @@ class WerewolfFeature {
 
   mentionOf(jid) {
     return '@' + jid.split('@')[0];
+  }
+
+  disp(game, p) {
+    // Nama tampilan: di mode tes pakai nama polos (JID bot tes tidak valid untuk mention)
+    return game.isTest ? p.name : this.mentionOf(p.jid);
   }
 
   async send(chatId, text, mentions) {
@@ -229,6 +239,8 @@ class WerewolfFeature {
         case 'batal': return this.cmdBatal(chatId, sender, m);
         case 'status': return this.cmdStatus(chatId, m);
         case 'vote': return this.cmdVote(chatId, sender, name, args, m);
+        case 'tes': return this.cmdTes(chatId, sender, name, args, m);
+        case 'stop': return this.cmdStop(chatId, sender);
         case 'mangsa': return this.nightAction(sender, 'serigala', args, m);
         case 'terawang': return this.nightAction(sender, 'dukun', args, m);
         case 'lindungi': return this.nightAction(sender, 'dokter', args, m);
@@ -262,7 +274,7 @@ class WerewolfFeature {
       '🐺 *WEREWOLF — Panduan*\n\n' +
         (inGroup
           ? '*Di grup:*\n.ww baru — buka lobby\n.ww join — ikut main\n.ww mulai — mulai (min. 2 pemain, ideal 7+)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan (pembuat lobby)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
-          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n\n') +
+          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
         'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.\n' +
         '🎙️ Bot bersuara sebagai narator otomatis di momen penting!',
@@ -371,6 +383,7 @@ class WerewolfFeature {
 
   // ============================================================ malam
   async startNight(game) {
+    if (game.isTest) return this.startTestNight(game);
     game.phase = 'night';
     game.votes = new Map();
     const alive = this.alivePlayers(game);
@@ -508,8 +521,8 @@ class WerewolfFeature {
       korban.alive = false;
       await this.send(
         game.chatId,
-        `☀️ *Pagi hari...*\n\n😱 ${this.mentionOf(korban.jid)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
-        [korban.jid]
+        `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
+        game.isTest ? undefined : [korban.jid]
       );
       this.sendVoice(game.chatId, `Pagi telah tiba. ${korban.name} ditemukan tak bernyawa. Ia ternyata seorang ${this.ROLE_SUARA[korban.role]}.`);
     } else {
@@ -522,8 +535,207 @@ class WerewolfFeature {
     await this.startDiscuss(game);
   }
 
+  // ============================================================ mode tes solo
+  async cmdTes(chatId, sender, name, args, m) {
+    if (this.isGroup(chatId)) {
+      return this.send(chatId, 'Mode tes hanya di *DM* (chat pribadi dengan bot).');
+    }
+    const cur = this.getGame(chatId);
+    if (cur && cur.phase !== 'ended') {
+      return this.send(chatId, 'Sesi tes sudah berjalan. Ketik *.ww stop* untuk berhenti.');
+    }
+    let n = parseInt(args[0], 10);
+    if (!n || n < 2) n = 8;
+    if (n > 12) n = 12;
+
+    const game = {
+      chatId, creator: sender, phase: 'lobby',
+      players: new Map(), day: 0, timer: null, night: null,
+      votes: new Map(), isTest: true, testUser: sender, testAccused: {},
+    };
+    game.players.set(sender, { jid: sender, name, role: 'warga', alive: true });
+    const names = [...this.TEST_NAMES].sort(() => Math.random() - 0.5);
+    for (let i = 1; i < n; i++) {
+      const jid = `wwtest_${Date.now()}_${i}@test`;
+      game.players.set(jid, { jid, name: names[(i - 1) % names.length], role: 'warga', alive: true });
+    }
+    const roles = this.makeRoles(n);
+    [...game.players.values()].forEach((p, i) => { p.role = roles[i]; });
+    this.games.set(chatId, game);
+
+    const me = game.players.get(sender);
+    const others = [...game.players.values()].filter((p) => p.jid !== sender).map((p) => p.name).join(', ');
+    await this.dm(
+      sender,
+      `🎮 *SESI TES dimulai!* (${n} pemain: kamu + ${n - 1} bot)\n\n${this.ROLE_LABEL[me.role]}\n\n${this.ROLE_DESC[me.role]}\n\nPemain lain: ${others}\n\nKetik *.ww stop* untuk berhenti kapan saja.`
+    );
+    this.sendVoice(chatId, 'Sesi tes dimulai! Peranmu sudah dikirim. Selamat bermain!');
+    game.day = 1;
+    await this.startNight(game);
+  }
+
+  async cmdStop(chatId, sender) {
+    const game = this.getGame(chatId);
+    if (!game || !game.isTest || game.phase === 'ended') {
+      return this.send(chatId, 'Tidak ada sesi tes yang berjalan.');
+    }
+    if (sender !== game.testUser) return;
+    this.clearTimer(game);
+    game.phase = 'ended';
+    await this.send(chatId, '⏹️ Sesi tes dihentikan.');
+  }
+
+  async startTestNight(game) {
+    game.phase = 'night';
+    game.votes = new Map();
+    const alive = this.alivePlayers(game);
+    const nonWolves = alive.filter((p) => p.role !== 'serigala');
+    game.night = {
+      targets: nonWolves,
+      allTargets: alive,
+      seerTargets: [],
+      wolfVotes: new Map(),
+      seerDone: false,
+      doctorDone: false,
+      doctorTarget: null,
+    };
+    const me = game.players.get(game.testUser);
+
+    if (me.role === 'serigala') {
+      await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih warga untuk dimangsa.\nBalas: *.ww mangsa <nomor>*\n\n${this.numberedList(nonWolves)}`);
+    } else if (me.role === 'dukun') {
+      const list = alive.filter((p) => p.jid !== me.jid);
+      game.night.seerTargets = list;
+      await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih pemain untuk diterawang.\nBalas: *.ww terawang <nomor>* (atau *.ww terawang 0* untuk lewati)\n\n${this.numberedList(list)}`);
+    } else if (me.role === 'dokter') {
+      await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih pemain untuk dilindungi.\nBalas: *.ww lindungi <nomor>* (atau *.ww lindungi 0* untuk lewati)\n\n${this.numberedList(alive)}`);
+    } else {
+      await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nKamu warga biasa — tidur aja 😴\n\nPemain bot sedang beraksi...`);
+    }
+
+    await this.send(game.chatId, `🌙 *Malam ${game.day} tiba...* (${this.TEST_NIGHT_MS / 1000} detik)`);
+    this.sendVoice(game.chatId, `Malam ${game.day} telah tiba.`);
+    this.testAutoNight(game);
+
+    this.clearTimer(game);
+    game.timer = setTimeout(() => {
+      if (game.phase === 'night') this.resolveNight(game);
+    }, this.TEST_NIGHT_MS);
+  }
+
+  testAutoNight(game) {
+    const night = game.night;
+    const isUser = (p) => p.jid === game.testUser;
+    const fakeWolves = this.aliveWolves(game).filter((p) => !isUser(p));
+    const fakeSeers = this.alivePlayers(game).filter((p) => p.role === 'dukun' && !isUser(p));
+    const fakeDoctors = this.alivePlayers(game).filter((p) => p.role === 'dokter' && !isUser(p));
+    const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const delay = () => 4000 + Math.random() * 12000;
+
+    for (const w of fakeWolves) {
+      setTimeout(() => {
+        if (game.phase !== 'night') return;
+        const t = rnd(night.targets.filter((p) => p.alive));
+        if (t) night.wolfVotes.set(w.jid, t.jid);
+        this.maybeFastResolve(game);
+      }, delay());
+    }
+    for (const s of fakeSeers) {
+      setTimeout(() => {
+        if (game.phase !== 'night') return;
+        night.seerDone = true;
+        this.maybeFastResolve(game);
+      }, delay());
+    }
+    for (const d of fakeDoctors) {
+      setTimeout(() => {
+        if (game.phase !== 'night') return;
+        const t = rnd(this.alivePlayers(game));
+        if (t) night.doctorTarget = t.jid;
+        night.doctorDone = true;
+        this.maybeFastResolve(game);
+      }, delay());
+    }
+  }
+
+  async startTestDiscuss(game) {
+    game.phase = 'discuss';
+    const alive = this.alivePlayers(game);
+    await this.send(
+      game.chatId,
+      `💬 *Diskusi dimulai!* (${this.TEST_DISCUSS_MS / 1000} detik)\n\nYang masih hidup:\n${this.numberedList(alive)}\n\nPara pemain bot berdiskusi...`
+    );
+    const fakes = alive.filter((p) => p.jid !== game.testUser);
+    const templates = [
+      (b) => `Aku curiga sama ${b}... tadi malam dia online terus 👀`,
+      (b) => `${b} diem-diem bae dari tadi, mencurigakan!`,
+      (b) => `Firasatku bilang ${b} serigalanya. Voting dia aja!`,
+      (b) => `Jangan percaya ${b}, dia terlalu kalem...`,
+      (b) => `Aku tadi mimpi ${b} jadi serigala 🐺`,
+    ];
+    const shuffled = [...fakes].sort(() => Math.random() - 0.5);
+    const n = Math.min(3, shuffled.length);
+    for (let i = 0; i < n; i++) {
+      const speaker = shuffled[i];
+      const candidates = alive.filter((p) => p.jid !== speaker.jid);
+      const target = candidates[Math.floor(Math.random() * candidates.length)];
+      if (!speaker || !target) continue;
+      game.testAccused[target.jid] = (game.testAccused[target.jid] || 0) + 1;
+      const msg = templates[Math.floor(Math.random() * templates.length)](target.name);
+      setTimeout(() => {
+        if (game.phase === 'discuss') this.send(game.chatId, `💬 *${speaker.name}:* ${msg}`);
+      }, 6000 + i * 11000 + Math.random() * 4000);
+    }
+    this.clearTimer(game);
+    game.timer = setTimeout(() => {
+      if (game.phase === 'discuss') this.startVote(game);
+    }, this.TEST_DISCUSS_MS);
+  }
+
+  async startTestVote(game) {
+    game.phase = 'vote';
+    game.votes = new Map();
+    game.voteTargets = this.alivePlayers(game);
+    await this.send(
+      game.chatId,
+      `🗳️ *VOTING!* (${this.TEST_VOTE_MS / 1000} detik)\nBalas: *.ww vote <nomor>*\n\n${this.numberedList(game.voteTargets)}`
+    );
+    this.sendVoice(game.chatId, 'Voting dimulai. Tentukan siapa yang akan disingkirkan!');
+    this.testAutoVote(game);
+    this.clearTimer(game);
+    game.timer = setTimeout(() => {
+      if (game.phase === 'vote') this.resolveVote(game);
+    }, this.TEST_VOTE_MS);
+  }
+
+  testAutoVote(game) {
+    const fakes = this.alivePlayers(game).filter((p) => p.jid !== game.testUser);
+    let accused = null;
+    let best = 0;
+    for (const [jid, c] of Object.entries(game.testAccused || {})) {
+      const p = game.players.get(jid);
+      if (p && p.alive && c > best) { best = c; accused = jid; }
+    }
+    for (const f of fakes) {
+      setTimeout(() => {
+        if (game.phase !== 'vote') return;
+        const opts = game.voteTargets.filter((p) => p.alive && p.jid !== f.jid);
+        if (!opts.length) return;
+        const acc = accused && game.players.get(accused);
+        let pick;
+        if (acc && acc.alive && acc.jid !== f.jid && Math.random() < 0.45) {
+          pick = acc;
+        } else {
+          pick = opts[Math.floor(Math.random() * opts.length)];
+        }
+        game.votes.set(f.jid, pick.jid);
+      }, 5000 + Math.random() * 15000);
+    }
+  }
+
   // ============================================================ siang
   async startDiscuss(game) {
+    if (game.isTest) return this.startTestDiscuss(game);
     game.phase = 'discuss';
     const alive = this.alivePlayers(game);
     const mentions = alive.map((p) => p.jid);
@@ -539,6 +751,7 @@ class WerewolfFeature {
   }
 
   async startVote(game) {
+    if (game.isTest) return this.startTestVote(game);
     game.phase = 'vote';
     game.votes = new Map();
     game.voteTargets = this.alivePlayers(game);
@@ -554,8 +767,10 @@ class WerewolfFeature {
   }
 
   async cmdVote(chatId, sender, name, args, m) {
-    if (!this.isGroup(chatId)) return this.send(chatId, 'Voting dilakukan di grup.');
     const game = this.getGame(chatId);
+    if (!this.isGroup(chatId) && !(game && game.isTest)) {
+      return this.send(chatId, 'Voting dilakukan di grup.');
+    }
     if (!game || game.phase !== 'vote') return this.send(chatId, 'Tidak ada voting yang aktif.');
     const p = game.players.get(sender);
     if (!p || !p.alive) return this.send(chatId, 'Kamu tidak bisa voting.');
@@ -591,8 +806,8 @@ class WerewolfFeature {
       for (const x of valid.values()) if (x === targetJid) count++;
       await this.send(
         game.chatId,
-        `⚖️ Hasil voting: ${this.mentionOf(t.jid)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
-        [t.jid]
+        `⚖️ Hasil voting: ${this.disp(game, t)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
+        game.isTest ? undefined : [t.jid]
       );
       this.sendVoice(game.chatId, `${t.name} tersingkir dengan ${count} suara. Ia ternyata seorang ${this.ROLE_SUARA[t.role]}.`);
     } else {
