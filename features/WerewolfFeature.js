@@ -17,7 +17,16 @@
  *
  * Alur otomatis: lobby -> peran via DM -> malam (aksi via DM) ->
  * pagi (pengumuman) -> diskusi (timer) -> voting -> ulangi sampai menang.
+ *
+ * Bot juga bersuara 🎙️ sebagai narator otomatis (voice note) di momen penting.
+ * Matikan via env WW_VOICE_OFF=1.
  */
+const path = require('path');
+const fs = require('fs');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
+
 class WerewolfFeature {
   constructor() {
     this.name = 'ww';
@@ -34,6 +43,16 @@ class WerewolfFeature {
     this.DISCUSS_MS = 300000;
     this.VOTE_MS = 90000;
     this.DM_DELAY_MS = 700;
+
+    // Narator suara (voice note). Matikan: env WW_VOICE_OFF=1
+    this.VOICE = !process.env.WW_VOICE_OFF;
+    this.TTS_SCRIPT = path.join(__dirname, '..', 'utils', 'tts.py');
+    this.ROLE_SUARA = {
+      serigala: 'serigala',
+      dukun: 'dukun',
+      dokter: 'dokter',
+      warga: 'warga biasa',
+    };
 
     this.ROLE_LABEL = {
       serigala: '🐺 Serigala',
@@ -94,6 +113,27 @@ class WerewolfFeature {
       console.error('[WW] DM gagal ke', userJid, ':', e.message);
       return false;
     }
+  }
+
+  sendVoice(chatId, text) {
+    // Narator suara (voice note). Fire-and-forget: teks tetap jadi acuan,
+    // suara hanya pemanis. Gagal diam-diam.
+    if (!this.VOICE || !this.sock) return;
+    const out = `/tmp/ww_${Date.now()}_${Math.floor(Math.random() * 1e6)}.ogg`;
+    (async () => {
+      try {
+        await execFileAsync('python3', [this.TTS_SCRIPT, text, out], { timeout: 30000 });
+        await this.sock.sendMessage(chatId, {
+          audio: { url: out },
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: true,
+        });
+      } catch (e) {
+        console.error('[WW] voice gagal:', e.message);
+      } finally {
+        try { fs.unlinkSync(out); } catch (e) {}
+      }
+    })();
   }
 
   sleep(ms) {
@@ -224,7 +264,8 @@ class WerewolfFeature {
           ? '*Di grup:*\n.ww baru — buka lobby\n.ww join — ikut main\n.ww mulai — mulai (min. 2 pemain, ideal 7+)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan (pembuat lobby)\n\n*Di DM (chat pribadi bot):*\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
           : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
-        'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.',
+        'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.\n' +
+        '🎙️ Bot bersuara sebagai narator otomatis di momen penting!',
       null
     );
   }
@@ -324,6 +365,7 @@ class WerewolfFeature {
         players.map((p) => this.mentionOf(p.jid)).join(' '),
       mentions
     );
+    this.sendVoice(chatId, 'Permainan Werewolf dimulai! Peran sudah dikirim ke pesan pribadi masing-masing. Jaga rahasiamu!');
     await this.startNight(game);
   }
 
@@ -374,6 +416,7 @@ class WerewolfFeature {
       game.chatId,
       `🌙 *Malam ${game.day} tiba...* semua pemain cek DM dari bot! (${this.NIGHT_MS / 1000} detik)`
     );
+    this.sendVoice(game.chatId, `Malam ${game.day} telah tiba. Warga desa, tidurlah. Para serigala, bangunlah, dan pilih mangsamu.`);
     this.clearTimer(game);
     game.timer = setTimeout(() => {
       if (game.phase === 'night') this.resolveNight(game);
@@ -460,6 +503,7 @@ class WerewolfFeature {
     const korban = targetJid && game.players.get(targetJid);
     if (korban && korban.jid === protectedJid) {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\n💉 Serangan serigala malam ini berhasil DIGAGALKAN oleh dokter!');
+      this.sendVoice(game.chatId, 'Pagi telah tiba. Serangan serigala berhasil digagalkan oleh dokter!');
     } else if (korban) {
       korban.alive = false;
       await this.send(
@@ -467,8 +511,10 @@ class WerewolfFeature {
         `☀️ *Pagi hari...*\n\n😱 ${this.mentionOf(korban.jid)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
         [korban.jid]
       );
+      this.sendVoice(game.chatId, `Pagi telah tiba. ${korban.name} ditemukan tak bernyawa. Ia ternyata seorang ${this.ROLE_SUARA[korban.role]}.`);
     } else {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\nMalam yang tenang. Tidak ada korban.');
+      this.sendVoice(game.chatId, 'Pagi telah tiba. Malam yang tenang. Tidak ada korban.');
     }
 
     const winner = this.checkWinner(game);
@@ -500,6 +546,7 @@ class WerewolfFeature {
       game.chatId,
       `🗳️ *VOTING!* (${this.VOTE_MS / 1000} detik)\nBalas: *.ww vote <nomor>*\n\n${this.numberedList(game.voteTargets)}`
     );
+    this.sendVoice(game.chatId, 'Voting dimulai. Tentukan siapa yang akan disingkirkan!');
     this.clearTimer(game);
     game.timer = setTimeout(() => {
       if (game.phase === 'vote') this.resolveVote(game);
@@ -547,6 +594,7 @@ class WerewolfFeature {
         `⚖️ Hasil voting: ${this.mentionOf(t.jid)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
         [t.jid]
       );
+      this.sendVoice(game.chatId, `${t.name} tersingkir dengan ${count} suara. Ia ternyata seorang ${this.ROLE_SUARA[t.role]}.`);
     } else {
       await this.send(game.chatId, '⚖️ Voting seri / tidak ada suara — tidak ada yang tersingkir.');
     }
@@ -567,6 +615,12 @@ class WerewolfFeature {
         ? '🐺 *SERIGALA MENANG!* Mereka berhasil menguasai desa.'
         : '🧑 *WARGA MENANG!* Semua serigala telah tersingkir.';
     await this.send(game.chatId, `${head}\n\n*Daftar peran:*\n${lines.join('\n')}`);
+    this.sendVoice(
+      game.chatId,
+      winner === 'serigala'
+        ? 'Serigala menang! Mereka berhasil menguasai desa. Permainan selesai.'
+        : 'Warga menang! Semua serigala telah tersingkir. Permainan selesai.'
+    );
   }
 }
 
