@@ -243,6 +243,12 @@ class WerewolfFeature {
     return null;
   }
 
+  async notifyMod(game, text) {
+    // Ringkasan untuk moderator via DM — pantau game dari chat pribadi, bukan grup.
+    if (!game || game.isTest || !game.moderator) return;
+    await this.dm(game.moderator.jid, `🎤 ${text}`);
+  }
+
   // ============================================================ perintah grup
   async cmdBantu(chatId, m) {
     const inGroup = this.isGroup(chatId);
@@ -273,9 +279,21 @@ class WerewolfFeature {
       moderator: { jid: sender, nick },
       players: new Map(), day: 0, timer: null, night: null, votes: new Map(),
     });
+    // Beri tahu moderator via DM: dia pantau dari chat pribadi, bukan grup.
+    await this.dm(
+      sender,
+      `🎤 *Kamu MODERATOR game Werewolf ini.*\n\n` +
+        `Tugasmu memandu jalannya game. Pantau dari chat pribadi ini — tidak perlu mantengin grup.\n\n` +
+        `*Perintah moderator* (ketik di grup):\n` +
+        `• .ww mulai — mulai game\n` +
+        `• .ww skip — lewati fase yang berjalan\n` +
+        `• .ww batal — batalkan game\n\n` +
+        `Pemain join dengan: *.ww join <nickname>*\n` +
+        `Saat game dimulai, daftar lengkap peran + nickname dikirim ke sini. Rahasiakan! 🤫`
+    );
     await this.send(
       chatId,
-      `🐺 *LOBBY WEREWOLF dibuka!*\n\n🎤 Moderator: *${nick}*\n\nKetik *.ww join <nickname>* untuk ikut (min. ${this.MIN_PLAYERS} pemain).\nContoh: *.ww join Ucul*\n\nModerator mengetik *.ww mulai* kalau sudah siap.\n\n⚠️ Pastikan nomor bot ini tidak dibisukan supaya DM peran masuk!`
+      `🐺 *LOBBY WEREWOLF dibuka!*\n\n🎤 Moderator: *${nick}* (cek DM dari bot! 📩)\n\nKetik *.ww join <nickname>* untuk ikut (min. ${this.MIN_PLAYERS} pemain).\nContoh: *.ww join Ucul*\n\nModerator mengetik *.ww mulai* kalau sudah siap.\n\n⚠️ Pastikan nomor bot ini tidak dibisukan supaya DM peran masuk!`
     );
   }
 
@@ -373,6 +391,14 @@ class WerewolfFeature {
     }
 
     game.day = 1;
+    // Moderator tahu semua peran + nickname (via DM, rahasia)
+    if (game.moderator) {
+      const roleLines = players.map((p) => `• ${p.name} — ${this.ROLE_LABEL[p.role]}`).join('\n');
+      await this.dm(
+        game.moderator.jid,
+        `🎤 *Game dimulai! Daftar peran (RAHASIA):*\n\n${roleLines}\n\nJangan bocorkan ke pemain! 🤫`
+      );
+    }
     const mentions = players.map((p) => p.jid);
     const testMode = players.length < this.RECOMMENDED_MIN;
     await this.send(
@@ -520,6 +546,7 @@ class WerewolfFeature {
     const korban = targetJid && game.players.get(targetJid);
     if (korban && korban.jid === protectedJid) {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\n💉 Serangan serigala malam ini berhasil DIGAGALKAN oleh dokter!');
+      await this.notifyMod(game, 'Pagi: serangan serigala digagalkan dokter. Tidak ada korban.');
     } else if (korban) {
       korban.alive = false;
       await this.send(
@@ -527,8 +554,10 @@ class WerewolfFeature {
         `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`,
         game.isTest ? undefined : [korban.jid]
       );
+      await this.notifyMod(game, `Pagi: ${korban.name} mati — ia ${this.ROLE_LABEL[korban.role]}.`);
     } else {
       await this.send(game.chatId, '☀️ *Pagi hari...*\n\nMalam yang tenang. Tidak ada korban.');
+      await this.notifyMod(game, 'Pagi: malam tenang, tidak ada korban.');
     }
 
     const winner = this.checkWinner(game);
@@ -806,8 +835,10 @@ class WerewolfFeature {
         `⚖️ Hasil voting: ${this.disp(game, t)} tersingkir dengan ${count} suara.\nIa adalah *${this.ROLE_LABEL[t.role]}*.`,
         game.isTest ? undefined : [t.jid]
       );
+      await this.notifyMod(game, `Voting: ${t.name} tersingkir (${count} suara) — ia ${this.ROLE_LABEL[t.role]}.`);
     } else {
       await this.send(game.chatId, '⚖️ Voting seri / tidak ada suara — tidak ada yang tersingkir.');
+      await this.notifyMod(game, 'Voting: seri, tidak ada yang tersingkir.');
     }
     const winner = this.checkWinner(game);
     if (winner) return this.endGame(game, winner);
@@ -826,6 +857,10 @@ class WerewolfFeature {
         ? '🐺 *SERIGALA MENANG!* Mereka berhasil menguasai desa.'
         : '🧑 *WARGA MENANG!* Semua serigala telah tersingkir.';
     await this.send(game.chatId, `${head}\n\n*Daftar peran:*\n${lines.join('\n')}`);
+    await this.notifyMod(
+      game,
+      winner === 'serigala' ? 'Game selesai: 🐺 SERIGALA menang.' : 'Game selesai: 🧑 WARGA menang.'
+    );
   }
 }
 
