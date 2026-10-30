@@ -55,6 +55,7 @@ class WerewolfFeature {
       serigala: '🐺 Serigala',
       dukun: '🔮 Dukun',
       dokter: '💉 Dokter',
+      sk: '🔪 Serial Killer',
       warga: '🧑 Warga',
     };
     this.ROLE_DESC = {
@@ -64,6 +65,8 @@ class WerewolfFeature {
         'Kamu DUKUN. Setiap malam kamu boleh menerawang SATU pemain:\n.ww terawang <nomor>\natau lewati dengan:\n.ww terawang 0',
       dokter:
         'Kamu DOKTER. Setiap malam kamu boleh melindungi SATU pemain (termasuk dirimu):\n.ww lindungi <nomor>\natau lewati dengan:\n.ww lindungi 0',
+      sk:
+        'Kamu SERIAL KILLER 🔪. Setiap malam, bunuh SIAPA PUN yang kamu mau (termasuk serigala!) dengan:\n.ww bunuh <nomor>\nKamu menang jika kamu SATU-SATUNYA yang tersisa hidup. Hati-hati: kamu bisa mati dimangsa serigala atau divote siang hari!',
       warga:
         'Kamu WARGA biasa. Malam hari kamu tidur. Siang hari, diskusikan dan votinglah untuk menyingkirkan serigala yang bersembunyi di antara kalian!',
     };
@@ -145,6 +148,7 @@ class WerewolfFeature {
     const wolves = Math.max(2, Math.floor(n / 5));
     const roles = Array(wolves).fill('serigala');
     roles.push('dukun');
+    roles.push('sk'); // serial killer: selalu 1 di game normal
     if (n >= 9) roles.push('dokter');
     if (n >= 16) roles.push('dokter');
     while (roles.length < n) roles.push('warga');
@@ -165,10 +169,14 @@ class WerewolfFeature {
   }
 
   checkWinner(game) {
-    const wolves = this.aliveWolves(game).length;
-    const others = this.alivePlayers(game).length - wolves;
-    if (wolves === 0) return 'warga';
-    if (wolves >= others) return 'serigala';
+    const alive = this.alivePlayers(game);
+    const wolves = alive.filter((p) => p.role === 'serigala').length;
+    const sk = alive.filter((p) => p.role === 'sk').length;
+    const others = alive.length - wolves - sk; // warga + dukun + dokter
+    // Serial killer menang kalau tinggal dia sendiri
+    if (alive.length === 1 && sk === 1) return 'sk';
+    if (wolves === 0 && sk === 0) return 'warga';
+    if (wolves > 0 && wolves >= others + sk) return 'serigala';
     return null;
   }
 
@@ -228,6 +236,7 @@ class WerewolfFeature {
         case 'nick': return this.cmdNick(chatId, sender, args, m);
         case 'foto': return this.cmdFoto(chatId, sender, name, m);
         case 'mangsa': return this.nightAction(sender, 'serigala', args, m);
+        case 'bunuh': return this.nightAction(sender, 'sk', args, m);
         case 'terawang': return this.nightAction(sender, 'dukun', args, m);
         case 'lindungi': return this.nightAction(sender, 'dokter', args, m);
         default:
@@ -385,8 +394,8 @@ class WerewolfFeature {
       chatId,
       '🐺 *WEREWOLF — Panduan*\n\n' +
         (inGroup
-          ? '*Di grup:*\n.ww baru [nickname] — buka lobby (kamu jadi 🎤 moderator)\n.ww join [nickname] — ikut main (lengkapi data via DM)\n.ww mulai — mulai game (moderator saja, min. 2 pemain, ideal 7+)\n.ww skip — lewati fase saat ini (moderator saja)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan game (moderator saja)\n\n*Di DM (chat pribadi bot):*\n.ww nick <nickname> — isi nickname\n.ww foto — kirim *FOTO* dengan caption ini (foto selfie)\n.ww mangsa <nomor> — serigala pilih korban\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n'
-          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n.ww skip — lewati fase (sesi tes)\n\n') +
+          ? '*Di grup:*\n.ww baru [nickname] — buka lobby (kamu jadi 🎤 moderator)\n.ww join [nickname] — ikut main (lengkapi data via DM)\n.ww mulai — mulai game (moderator saja, min. 2 pemain, ideal 7+)\n.ww skip — lewati fase saat ini (moderator saja)\n.ww vote <nomor> — voting siang\n.ww status — status game\n.ww batal — batalkan game (moderator saja)\n\n*Di DM (chat pribadi bot):*\n.ww nick <nickname> — isi nickname\n.ww foto — kirim *FOTO* dengan caption ini (foto selfie)\n.ww mangsa <nomor> — serigala pilih korban\n.ww bunuh <nomor> — serial killer bunuh siapa pun\n.ww terawang <nomor> — dukun terawang (0 = lewati)\n.ww lindungi <nomor> — dokter lindungi (0 = lewati)\n\n*Peran:* 🐺 Serigala, 🔪 Serial Killer (1 orang, menang jika sisa sendiri), 🔮 Dukun, 💉 Dokter, 🧑 Warga\n\n'
+          : '*Di DM:*\n.ww mangsa <nomor> — (serigala) pilih korban\n.ww bunuh <nomor> — (serial killer) bunuh siapa pun\n.ww terawang <nomor> — (dukun) terawang peran, 0 = lewati\n.ww lindungi <nomor> — (dokter) lindungi, 0 = lewati\n.ww tes [jumlah] — sesi tes solo lawan bot (tanpa grup)\n.ww stop — hentikan sesi tes\n.ww skip — lewati fase (sesi tes)\n\n') +
         'Alur: lobby → peran via DM → 🌙 malam → ☀️ pagi → 💬 diskusi → 🗳️ voting → ulangi.\n' +
         'Warga menang jika semua serigala tersingkir. Serigala menang jika jumlah mereka ≥ sisa warga.\n' +
         '🎤 Moderator memandu jalannya game (tidak ikut main).',
@@ -637,21 +646,31 @@ class WerewolfFeature {
     const nonWolves = alive.filter((p) => p.role !== 'serigala');
     game.night = {
       targets: nonWolves, // urutan bernomor untuk serigala
-      allTargets: alive,  // urutan bernomor untuk dukun/dokter
+      allTargets: alive,  // urutan bernomor untuk dukun/dokter/sk
       wolfVotes: new Map(),
       seerDone: false,
       doctorDone: false,
       doctorTarget: null,
+      skTarget: null,
+      skDone: false,
     };
 
     const wolves = this.aliveWolves(game);
     const seers = alive.filter((p) => p.role === 'dukun');
     const doctors = alive.filter((p) => p.role === 'dokter');
+    const killers = alive.filter((p) => p.role === 'sk');
 
     for (const w of wolves) {
       await this.dm(
         w.jid,
         `🌙 *MALAM ${game.day}*\nPilih warga untuk dimangsa.\nBalas: *.ww mangsa <nomor>*\n\n${this.numberedList(nonWolves)}`
+      );
+      await this.sleep(this.DM_DELAY_MS);
+    }
+    for (const k of killers) {
+      await this.dm(
+        k.jid,
+        `🌙 *MALAM ${game.day}*\nPilih SIAPA PUN untuk dibunuh (termasuk serigala!).\nBalas: *.ww bunuh <nomor>*\n\n${this.numberedList(alive)}`
       );
       await this.sleep(this.DM_DELAY_MS);
     }
@@ -702,6 +721,13 @@ class WerewolfFeature {
       if (!target) return this.send(chatId, `Nomor tidak valid! Pilih 1-${night.targets.length}.`);
       night.wolfVotes.set(sender, target.jid);
       await this.send(chatId, `Pilihanmu: memangsa *${target.name}*. Menunggu kawan serigala lain... 🌙`);
+    } else if (role === 'sk') {
+      const target = night.allTargets[num - 1];
+      if (!target) return this.send(chatId, `Nomor tidak valid! Pilih 1-${night.allTargets.length}.`);
+      if (target.jid === sender) return this.send(chatId, 'Kamu tidak bisa membunuh dirimu sendiri! 🔪');
+      night.skTarget = target.jid;
+      night.skDone = true;
+      await this.send(chatId, `🔪 Targetmu malam ini: *${target.name}*.`);
     } else if (role === 'dukun') {
       if (num === 0) {
         night.seerDone = true;
@@ -732,10 +758,12 @@ class WerewolfFeature {
     const wolves = this.aliveWolves(game);
     const seers = this.alivePlayers(game).filter((p) => p.role === 'dukun');
     const doctors = this.alivePlayers(game).filter((p) => p.role === 'dokter');
+    const killers = this.alivePlayers(game).filter((p) => p.role === 'sk');
     const wolvesDone = wolves.length > 0 && wolves.every((w) => game.night.wolfVotes.has(w.jid));
     const seersDone = seers.length === 0 || game.night.seerDone;
     const doctorsDone = doctors.length === 0 || game.night.doctorDone;
-    if (wolvesDone && seersDone && doctorsDone) {
+    const killersDone = killers.length === 0 || game.night.skDone;
+    if (wolvesDone && seersDone && doctorsDone && killersDone) {
       setTimeout(() => {
         if (game.phase === 'night') this.resolveNight(game);
       }, 5000);
@@ -759,21 +787,49 @@ class WerewolfFeature {
     const dp = protectedJid && game.players.get(protectedJid);
     if (!dp || !dp.alive) protectedJid = null;
 
-    const korban = targetJid && game.players.get(targetJid);
-    if (korban && korban.jid === protectedJid) {
-      await this.send(game.chatId, '☀️ *Pagi hari...*\n\n💉 Serangan serigala malam ini berhasil DIGAGALKAN oleh dokter!');
-      await this.notifyMod(game, 'Pagi: serangan serigala digagalkan dokter. Tidak ada korban.');
-    } else if (korban) {
-      korban.alive = false;
-      await this.sendElimination(
-        game,
-        korban,
-        `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, korban)} ditemukan tak bernyawa! Ia adalah *${this.ROLE_LABEL[korban.role]}*.`
-      );
-      await this.notifyMod(game, `Pagi: ${korban.name} mati — ia ${this.ROLE_LABEL[korban.role]}.`);
+    // Target serial killer (bisa siapa pun, termasuk serigala)
+    let skTargetJid = night.skTarget;
+    const skp = skTargetJid && game.players.get(skTargetJid);
+    const skAlive = this.alivePlayers(game).some((p) => p.role === 'sk');
+    if (!skAlive || !skp || !skp.alive) skTargetJid = null;
+
+    const isProtected = (jid) => jid && jid === protectedJid;
+    const deaths = []; // {player, cause: 'serigala'|'sk'}
+
+    if (targetJid && !isProtected(targetJid)) {
+      const korban = game.players.get(targetJid);
+      if (korban && korban.alive) deaths.push({ player: korban, cause: 'serigala' });
+    }
+    if (skTargetJid && !isProtected(skTargetJid)) {
+      const korban = game.players.get(skTargetJid);
+      // jangan bunuh dua kali kalau sama dengan korban serigala
+      if (korban && korban.alive && !deaths.some((d) => d.player.jid === korban.jid)) {
+        deaths.push({ player: korban, cause: 'sk' });
+      }
+    }
+
+    const blockedWolf = targetJid && isProtected(targetJid);
+    const blockedSk = skTargetJid && isProtected(skTargetJid);
+
+    if (deaths.length === 0) {
+      if (blockedWolf || blockedSk) {
+        await this.send(game.chatId, '☀️ *Pagi hari...*\n\n💉 Serangan malam ini berhasil DIGAGALKAN oleh dokter!');
+        await this.notifyMod(game, 'Pagi: serangan digagalkan dokter. Tidak ada korban.');
+      } else {
+        await this.send(game.chatId, '☀️ *Pagi hari...*\n\nMalam yang tenang. Tidak ada korban.');
+        await this.notifyMod(game, 'Pagi: malam tenang, tidak ada korban.');
+      }
     } else {
-      await this.send(game.chatId, '☀️ *Pagi hari...*\n\nMalam yang tenang. Tidak ada korban.');
-      await this.notifyMod(game, 'Pagi: malam tenang, tidak ada korban.');
+      for (const d of deaths) {
+        d.player.alive = false;
+        const causeText = d.cause === 'sk' ? '🔪 dibunuh secara misterius' : 'ditemukan tak bernyawa';
+        await this.sendElimination(
+          game,
+          d.player,
+          `☀️ *Pagi hari...*\n\n😱 ${this.disp(game, d.player)} ${causeText}! Ia adalah *${this.ROLE_LABEL[d.player.role]}*.`
+        );
+        await this.notifyMod(game, `Pagi: ${d.player.name} mati (${d.cause}) — ia ${this.ROLE_LABEL[d.player.role]}.`);
+      }
     }
 
     const winner = this.checkWinner(game);
@@ -843,6 +899,8 @@ class WerewolfFeature {
       seerDone: false,
       doctorDone: false,
       doctorTarget: null,
+      skTarget: null,
+      skDone: false,
     };
     const me = game.players.get(game.testUser);
 
@@ -854,6 +912,8 @@ class WerewolfFeature {
       await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih pemain untuk diterawang.\nBalas: *.ww terawang <nomor>* (atau *.ww terawang 0* untuk lewati)\n\n${this.numberedList(list)}`);
     } else if (me.role === 'dokter') {
       await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih pemain untuk dilindungi.\nBalas: *.ww lindungi <nomor>* (atau *.ww lindungi 0* untuk lewati)\n\n${this.numberedList(alive)}`);
+    } else if (me.role === 'sk') {
+      await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nPilih SIAPA PUN untuk dibunuh.\nBalas: *.ww bunuh <nomor>*\n\n${this.numberedList(alive)}`);
     } else {
       await this.dm(me.jid, `🌙 *MALAM ${game.day}*\nKamu warga biasa — tidur aja 😴\n\nPemain bot sedang beraksi...`);
     }
@@ -873,6 +933,7 @@ class WerewolfFeature {
     const fakeWolves = this.aliveWolves(game).filter((p) => !isUser(p));
     const fakeSeers = this.alivePlayers(game).filter((p) => p.role === 'dukun' && !isUser(p));
     const fakeDoctors = this.alivePlayers(game).filter((p) => p.role === 'dokter' && !isUser(p));
+    const fakeKillers = this.alivePlayers(game).filter((p) => p.role === 'sk' && !isUser(p));
     const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
     const delay = () => 4000 + Math.random() * 12000;
 
@@ -897,6 +958,15 @@ class WerewolfFeature {
         const t = rnd(this.alivePlayers(game));
         if (t) night.doctorTarget = t.jid;
         night.doctorDone = true;
+        this.maybeFastResolve(game);
+      }, delay());
+    }
+    for (const k of fakeKillers) {
+      setTimeout(() => {
+        if (game.phase !== 'night') return;
+        const t = rnd(this.alivePlayers(game).filter((p) => p.jid !== k.jid));
+        if (t) night.skTarget = t.jid;
+        night.skDone = true;
         this.maybeFastResolve(game);
       }, delay());
     }
@@ -1072,11 +1142,17 @@ class WerewolfFeature {
     const head =
       winner === 'serigala'
         ? '🐺 *SERIGALA MENANG!* Mereka berhasil menguasai desa.'
-        : '🧑 *WARGA MENANG!* Semua serigala telah tersingkir.';
+        : winner === 'sk'
+        ? '🔪 *SERIAL KILLER MENANG!* Dia satu-satunya yang tersisa hidup...'
+        : '🧑 *WARGA MENANG!* Semua serigala dan serial killer telah tersingkir.';
     await this.send(game.chatId, `${head}\n\n*Daftar peran:*\n${lines.join('\n')}`);
     await this.notifyMod(
       game,
-      winner === 'serigala' ? 'Game selesai: 🐺 SERIGALA menang.' : 'Game selesai: 🧑 WARGA menang.'
+      winner === 'serigala'
+        ? 'Game selesai: 🐺 SERIGALA menang.'
+        : winner === 'sk'
+        ? 'Game selesai: 🔪 SERIAL KILLER menang.'
+        : 'Game selesai: 🧑 WARGA menang.'
     );
   }
 }
